@@ -1,0 +1,151 @@
+# CloudPresale AI — 全栈一键部署
+# 用法:
+#   docker compose up -d                  # 使用 Docker Hub 预构建镜像
+#   docker compose --profile build up -d  # 本地构建镜像
+#
+# 首次启动后执行数据库初始化:
+#   docker compose exec api python scripts/init_db.py
+
+services:
+
+  # ── PostgreSQL ────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: presale-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-presale}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-presale123}
+      POSTGRES_DB: ${POSTGRES_DB:-presale_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-presale} -d ${POSTGRES_DB:-presale_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: presale-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── MinIO（对象存储）──────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: presale-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── ChromaDB（向量库 RAG）────────────────────────────
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: presale-chroma
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+
+  # ── FastAPI 后端 ──────────────────────────────────────
+  api:
+    image: hualeel/cloudpresale-api:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      profiles: [build]
+    container_name: presale-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-presale}:${POSTGRES_PASSWORD:-presale123}@postgres:5432/${POSTGRES_DB:-presale_db}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-32chars!!}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DEFAULT_LLM: ${DEFAULT_LLM:-claude-sonnet-4-6}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # ── Celery Worker（AI 异步任务）───────────────────────
+  worker:
+    image: hualeel/cloudpresale-api:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      profiles: [build]
+    container_name: presale-worker
+    restart: unless-stopped
+    command: celery -A app.services.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-presale}:${POSTGRES_PASSWORD:-presale123}@postgres:5432/${POSTGRES_DB:-presale_db}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DEFAULT_LLM: ${DEFAULT_LLM:-claude-sonnet-4-6}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── React 前端（nginx）───────────────────────────────
+  frontend:
+    image: hualeel/cloudpresale-frontend:latest
+    build:
+      context: ./cloudpresale
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
+      profiles: [build]
+    container_name: presale-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  chroma_data:
