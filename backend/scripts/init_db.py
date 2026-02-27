@@ -1,6 +1,10 @@
 """
 初始化数据库：创建表 + 插入初始数据（管理员账户 + 示例数据）
 运行：python scripts/init_db.py
+
+说明：
+- 首次部署时运行本脚本即可完成全部初始化（建表 + Alembic stamp + 种子数据）
+- 后续 Schema 变更请使用 Alembic：alembic upgrade head
 """
 import sys
 import os
@@ -22,6 +26,17 @@ engine = get_sync_engine()
 print("📦 创建数据库表...")
 Base.metadata.create_all(bind=engine)
 print("✓ 表创建完成")
+
+# 将 Alembic 版本标记为最新（stamp head），确保后续 alembic upgrade 正常工作
+print("📌 标记 Alembic 版本...")
+try:
+    from alembic.config import Config as AlembicConfig
+    from alembic import command as alembic_command
+    alembic_cfg = AlembicConfig(os.path.join(os.path.dirname(__file__), '..', 'alembic.ini'))
+    alembic_command.stamp(alembic_cfg, 'head')
+    print("✓ Alembic 已 stamp 到 head")
+except Exception as e:
+    print(f"⚠️  Alembic stamp 失败（可忽略）: {e}")
 
 SessionLocal = sessionmaker(bind=engine)
 db = SessionLocal()

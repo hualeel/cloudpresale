@@ -4,6 +4,7 @@
 import io
 import logging
 import uuid
+import zipfile
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -149,8 +150,96 @@ def _generate_file(
         filename = f"{safe_customer}_汇报方案PPT_v{version}_{date_str}.pptx"
         return data, filename, "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
+    elif dlv_type == DeliverableType.ppt_container:
+        from app.document_gen.ppt_generator import generate_ppt_container
+        data = generate_ppt_container(content, req_info, customer_name, version)
+        filename = f"{safe_customer}_容器平台专项PPT_v{version}_{date_str}.pptx"
+        return data, filename, "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+    elif dlv_type == DeliverableType.ppt_devops:
+        from app.document_gen.ppt_generator import generate_ppt_devops
+        data = generate_ppt_devops(content, req_info, customer_name, version)
+        filename = f"{safe_customer}_DevOps专项PPT_v{version}_{date_str}.pptx"
+        return data, filename, "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+    elif dlv_type == DeliverableType.ppt_security:
+        from app.document_gen.ppt_generator import generate_ppt_security
+        data = generate_ppt_security(content, req_info, customer_name, version)
+        filename = f"{safe_customer}_安全合规专项PPT_v{version}_{date_str}.pptx"
+        return data, filename, "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
     else:
         raise ValueError(f"Unknown deliverable type: {dlv_type}")
+
+
+def build_solution_zip(solution_id: uuid.UUID, db) -> str | None:
+    """
+    将指定 Solution 的所有就绪交付物从 MinIO 下载并打包为 ZIP，
+    上传至 MinIO 临时路径，返回 5 分钟有效期预签名 URL。
+    MinIO 不可用或文件为空时返回 None。
+    """
+    from datetime import timedelta
+
+    dlvs = db.query(Deliverable).filter(
+        Deliverable.solution_id == solution_id,
+        Deliverable.status == DeliverableStatus.ready,
+    ).all()
+
+    if not dlvs:
+        return None
+
+    minio = _get_minio_client()
+    if not minio:
+        return None
+
+    bucket = settings.MINIO_BUCKET
+
+    # 在内存中构建 ZIP
+    zip_buf = io.BytesIO()
+    added = 0
+    with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for dlv in dlvs:
+            if not dlv.file_path:
+                continue
+            try:
+                response = minio.get_object(bucket, dlv.file_path)
+                file_bytes = response.read()
+                response.close()
+                response.release_conn()
+                arc_name = dlv.file_name or dlv.file_path.split("/")[-1]
+                zf.writestr(arc_name, file_bytes)
+                added += 1
+            except Exception as exc:
+                logger.warning(f"Skipping {dlv.file_path} in zip: {exc}")
+
+    if added == 0:
+        return None
+
+    zip_buf.seek(0)
+    zip_data = zip_buf.read()
+
+    # 上传 ZIP 到 MinIO 临时路径
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    zip_object_name = f"temp/{solution_id}/package-{timestamp}.zip"
+    try:
+        if not minio.bucket_exists(bucket):
+            minio.make_bucket(bucket)
+        minio.put_object(
+            bucket, zip_object_name,
+            io.BytesIO(zip_data), length=len(zip_data),
+            content_type="application/zip",
+        )
+        url = minio.presigned_get_object(
+            bucket, zip_object_name,
+            expires=timedelta(minutes=5),
+            response_headers={
+                "response-content-disposition": f'attachment; filename="solution-{solution_id}-package.zip"'
+            },
+        )
+        return url
+    except Exception as exc:
+        logger.error(f"Failed to build/presign zip for solution {solution_id}: {exc}")
+        return None
 
 
 def get_presigned_download_url(storage_path: str, filename: str, expires_minutes: int = 60) -> str | None:

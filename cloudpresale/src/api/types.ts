@@ -222,3 +222,32 @@ export interface TeamMember {
   solutions_this_month: number
   active_opportunities: number
 }
+
+export interface LLMStatus {
+  anthropic_configured: boolean
+  current_model: string
+  status: 'connected' | 'not_configured' | 'error'
+  error: string | null
+}
+
+export interface SystemConfig {
+  default_llm: string
+  sensitive_data_routing: boolean
+  rag_top_k: number
+  agent_timeout_minutes: number
+  audit_log_enabled: boolean
+  auto_knowledge_base: boolean
+  max_concurrent_generations: number
+}
+
+export interface SettingsOut {
+  llm: LLMStatus
+  system: SystemConfig
+}
+
+export interface LLMTestResult {
+  ok: boolean
+  model: string
+  latency_ms: number | null
+  error: string | null
+}

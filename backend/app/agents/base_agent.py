@@ -64,7 +64,16 @@ def run_single_agent(
     if raw_input:
         req_text += f"\n\n**原始需求描述**:\n{raw_input}"
 
+    # RAG：检索相似历史案例，注入参考上下文
+    try:
+        from app.services.rag_service import retrieve_similar
+        rag_context = retrieve_similar(requirement_content, top_k=3)
+    except Exception:
+        rag_context = ""
+
     user_message = config["prompt_template"].format(requirement_content=req_text)
+    if rag_context:
+        user_message = rag_context + "\n\n---\n\n" + user_message
 
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 

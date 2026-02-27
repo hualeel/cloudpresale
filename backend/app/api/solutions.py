@@ -124,7 +124,43 @@ def update_solution_status(
                     diff={"status": status.value}))
     db.commit()
     db.refresh(sol)
+
+    # 赢单（approved）时将方案异步写入 RAG 知识库
+    if status == SolutionStatus.approved:
+        _trigger_rag_index(sol, db)
+
     return _to_out(sol)
+
+
+def _trigger_rag_index(sol: Solution, db: Session):
+    """在后台线程中将已批准方案写入 ChromaDB，不阻塞 API 响应。"""
+    import threading
+    from app.models.customer import Customer
+
+    req = sol.requirement
+    if not req:
+        return
+
+    customer = (
+        db.query(Customer).filter(Customer.id == req.opportunity.customer_id).first()
+        if req.opportunity else None
+    )
+    customer_name = customer.name if customer else ""
+
+    solution_id   = sol.id
+    req_content   = dict(req.content or {})
+    sol_content   = dict(sol.content or {})
+    req_title     = req.title
+
+    def _index():
+        try:
+            from app.services.rag_service import index_solution
+            index_solution(solution_id, req_content, sol_content, customer_name, req_title)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(f"RAG indexing failed for solution {solution_id}: {exc}")
+
+    threading.Thread(target=_index, daemon=True).start()
 
 
 @router.get("/{sol_id}/progress", summary="实时查询生成进度")

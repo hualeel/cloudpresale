@@ -21,6 +21,7 @@ export function CICD() {
           <div className="ss2">GitHub Actions → K8s 自动化部署</div>
         </div>
         <div className="fc g8">
+          <span className="tag tag-o txs">演示数据</span>
           <button className="btn btn-ghost btn-sm" onClick={() => setModal('trigger')}>⚡ 手动触发</button>
           <button className="btn btn-primary btn-sm" onClick={() => setModal('pipelineDetail')}>📋 查看配置</button>
         </div>

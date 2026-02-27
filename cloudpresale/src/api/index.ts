@@ -8,6 +8,7 @@ import type {
   DeliverableOut,
   DashboardStats, HierarchyCustomer,
   TeamMember,
+  SettingsOut, SystemConfig, LLMTestResult,
 } from './types'
 
 // ── Auth ──────────────────────────────────────────────
@@ -99,11 +100,20 @@ export const deliverablesApi = {
   },
   downloadUrl: (id: string) =>
     api.post<{ url: string; expires_in: number; file_name: string }>(`/deliverables/${id}/download-url`, {}),
+  packageUrl: (solution_id: string) =>
+    api.get<{ url: string; expires_in: number; file_count: number }>(`/deliverables/solution/${solution_id}/package`),
 }
 
 // ── Team ─────────────────────────────────────────────
 export const teamApi = {
   list: () => api.get<TeamMember[]>('/team'),
+}
+
+// ── Settings ──────────────────────────────────────────
+export const settingsApi = {
+  get: () => api.get<SettingsOut>('/settings'),
+  updateSystem: (data: Partial<SystemConfig>) => api.patch<SystemConfig>('/settings/system', data),
+  testLlm: () => api.post<LLMTestResult>('/settings/test-llm', {}),
 }
 
 export * from './types'

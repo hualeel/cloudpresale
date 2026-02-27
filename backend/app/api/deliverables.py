@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User
-from app.models.deliverable import Deliverable
+from app.models.deliverable import Deliverable, DeliverableStatus
 from app.models.audit_log import AuditLog
 from app.schemas.deliverable import DeliverableOut
 
@@ -66,28 +66,35 @@ def get_download_url(
     }
 
 
-@router.get("/solution/{solution_id}/package", summary="获取整包下载链接")
+@router.get("/solution/{solution_id}/package", summary="获取整包下载链接（ZIP）")
 def get_package_url(
     solution_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """生成该方案版本所有交付物的打包下载链接"""
+    """
+    将该方案版本所有就绪交付物打包为 ZIP，上传至 MinIO 临时路径，
+    返回 5 分钟有效期预签名 URL。
+    """
     dlvs = db.query(Deliverable).filter(
         Deliverable.solution_id == solution_id,
-        Deliverable.status == "ready",
+        Deliverable.status == DeliverableStatus.ready,
     ).all()
     if not dlvs:
         raise HTTPException(400, "该版本暂无可下载的交付物")
 
-    # 记录操作
+    from app.services.document_service import build_solution_zip
+    url = build_solution_zip(solution_id, db)
+    if not url:
+        raise HTTPException(503, "文件打包服务暂不可用（对象存储未连接）")
+
+    # 记录下载操作
     for d in dlvs:
         db.add(AuditLog(user_id=current_user.id, entity_type="deliverable", entity_id=d.id, action="download"))
     db.commit()
 
-    # TODO: 打包压缩 → MinIO 临时对象 → 预签名 URL
     return {
-        "url": f"/package/solution-{solution_id}.zip",
+        "url": url,
         "expires_in": 300,
         "file_count": len(dlvs),
     }

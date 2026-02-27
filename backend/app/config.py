@@ -29,5 +29,9 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     DEFAULT_LLM: str = "claude-sonnet-4-6"
 
+    # ChromaDB（RAG 知识库）
+    CHROMA_HOST: str = "localhost"
+    CHROMA_PORT: int = 8000
+
 
 settings = Settings()

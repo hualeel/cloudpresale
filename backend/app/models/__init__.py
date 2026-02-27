@@ -6,8 +6,10 @@ from app.models.solution import Solution
 from app.models.deliverable import Deliverable
 from app.models.gen_job import GenJob
 from app.models.audit_log import AuditLog
+from app.models.system_setting import SystemSetting
 
 __all__ = [
     "User", "Customer", "Opportunity", "Requirement",
     "Solution", "Deliverable", "GenJob", "AuditLog",
+    "SystemSetting",
 ]

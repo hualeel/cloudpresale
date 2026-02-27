@@ -12,6 +12,7 @@ from app.api.solutions import router as sols_router
 from app.api.deliverables import router as dlvs_router
 from app.api.team import router as team_router
 from app.api.dashboard import router as dashboard_router
+from app.api.settings import router as settings_router
 
 
 @asynccontextmanager
@@ -49,6 +50,7 @@ app.include_router(sols_router, prefix=API_PREFIX)
 app.include_router(dlvs_router, prefix=API_PREFIX)
 app.include_router(team_router, prefix=API_PREFIX)
 app.include_router(dashboard_router, prefix=API_PREFIX)
+app.include_router(settings_router, prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["系统"])

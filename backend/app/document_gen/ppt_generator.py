@@ -330,3 +330,174 @@ def _build_exec_summary(solution_content: dict, requirement: dict, customer_name
         "• 专业实施服务，保障平滑迁移",
     ]
     return lines
+
+
+# ── 专项 PPT ─────────────────────────────────────────
+
+def generate_ppt_container(
+    solution_content: dict,
+    requirement: dict,
+    customer_name: str,
+    version: str,
+) -> bytes:
+    """
+    生成容器平台专项 PPT（面向容器平台技术团队 / IT 基础架构部门）。
+    聚焦：架构设计（全量）+ 资源规格（全量）+ 迁移路径（摘要）。
+    """
+    prs = _new_prs()
+    date_str = datetime.now().strftime("%Y年%m月%d日")
+    doc_title = requirement.get("title", "容器平台建设方案")
+
+    _add_title_slide(prs, f"{customer_name}\n{doc_title}", "容器平台专项", customer_name, date_str)
+
+    # 平台建设背景与目标摘要页
+    _add_content_slide(prs, "平台建设背景与目标",
+                       _build_container_summary(solution_content, requirement, customer_name))
+
+    arch = solution_content.get("arch")
+    if arch:
+        text = arch.get("content", "") if isinstance(arch, dict) else str(arch)
+        _markdown_to_slides(prs, "容器平台架构设计", "01", text)
+
+    sizing = solution_content.get("sizing")
+    if sizing:
+        text = sizing.get("content", "") if isinstance(sizing, dict) else str(sizing)
+        _markdown_to_slides(prs, "集群资源规划", "02", text)
+
+    migration = solution_content.get("migration")
+    if migration:
+        text = migration.get("content", "") if isinstance(migration, dict) else str(migration)
+        _markdown_to_slides(prs, "应用上容器平台路径", "03", text[:800])
+
+    buf = io.BytesIO()
+    prs.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+def _build_container_summary(solution_content: dict, requirement: dict, customer_name: str) -> list[str]:
+    content = requirement.get("content", {})
+    return [
+        f"**客户：{customer_name}**",
+        "",
+        f"• 当前容器化比例：{content.get('current_containerization', '待确认')}",
+        f"• 目标容器化比例：{content.get('target_containerization', '≥80%')}",
+        f"• 集群数量规划：{content.get('cluster_count', '待确认')}",
+        f"• 核心建设模块：{'、'.join(content.get('modules', ['容器平台', 'DevOps', '微服务']))}",
+        "",
+        "**建设目标：**",
+        "• 建立统一云原生底座，支撑全行应用容器化改造",
+        "• 实现 CI/CD 流水线自动化，提升研发效能",
+        "• 满足金融监管合规要求，保障平台安全稳定运行",
+    ]
+
+
+def generate_ppt_devops(
+    solution_content: dict,
+    requirement: dict,
+    customer_name: str,
+    version: str,
+) -> bytes:
+    """
+    生成 DevOps 专项 PPT（面向开发团队 / DevOps 工程师）。
+    聚焦：应用迁移策略（全量）+ 实施计划（全量）+ 架构 CI/CD 部分（摘要）。
+    """
+    prs = _new_prs()
+    date_str = datetime.now().strftime("%Y年%m月%d日")
+    doc_title = requirement.get("title", "DevOps 转型方案")
+
+    _add_title_slide(prs, f"{customer_name}\n{doc_title}", "DevOps 专项", customer_name, date_str)
+
+    _add_content_slide(prs, "DevOps 转型目标",
+                       _build_devops_summary(solution_content, requirement, customer_name))
+
+    migration = solution_content.get("migration")
+    if migration:
+        text = migration.get("content", "") if isinstance(migration, dict) else str(migration)
+        _markdown_to_slides(prs, "应用迁移与上云路径", "01", text)
+
+    plan = solution_content.get("plan")
+    if plan:
+        text = plan.get("content", "") if isinstance(plan, dict) else str(plan)
+        _markdown_to_slides(prs, "项目实施计划", "02", text)
+
+    arch = solution_content.get("arch")
+    if arch:
+        text = arch.get("content", "") if isinstance(arch, dict) else str(arch)
+        _markdown_to_slides(prs, "CI/CD 与平台架构", "03", text[:800])
+
+    buf = io.BytesIO()
+    prs.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+def _build_devops_summary(solution_content: dict, requirement: dict, customer_name: str) -> list[str]:
+    content = requirement.get("content", {})
+    return [
+        f"**客户：{customer_name}**",
+        "",
+        f"• 目标容器化比例：{content.get('target_containerization', '≥80%')}",
+        f"• 预算范围：{content.get('budget_range', '待确认')}",
+        f"• 核心痛点：{content.get('pain_points', '研发效能低、环境一致性差、发布风险高')}",
+        "",
+        "**DevOps 转型目标：**",
+        "• 建立标准化 CI/CD 流水线，实现一键发布",
+        "• 统一容器镜像管理，保障镜像供应链安全",
+        "• 实现蓝绿发布 / 金丝雀发布，降低发布风险",
+        "• 建立研发效能度量体系（DORA Metrics）",
+    ]
+
+
+def generate_ppt_security(
+    solution_content: dict,
+    requirement: dict,
+    customer_name: str,
+    version: str,
+) -> bytes:
+    """
+    生成安全合规专项 PPT（面向安全团队 / 合规部门 / CISO）。
+    聚焦：安全合规方案（全量）+ 架构安全要点（摘要）。
+    """
+    prs = _new_prs()
+    date_str = datetime.now().strftime("%Y年%m月%d日")
+    doc_title = requirement.get("title", "云原生安全合规方案")
+
+    _add_title_slide(prs, f"{customer_name}\n{doc_title}", "安全合规专项", customer_name, date_str)
+
+    _add_content_slide(prs, "合规框架与安全目标",
+                       _build_security_summary(solution_content, requirement, customer_name))
+
+    security = solution_content.get("security")
+    if security:
+        text = security.get("content", "") if isinstance(security, dict) else str(security)
+        _markdown_to_slides(prs, "安全合规方案详述", "01", text)
+
+    arch = solution_content.get("arch")
+    if arch:
+        text = arch.get("content", "") if isinstance(arch, dict) else str(arch)
+        _markdown_to_slides(prs, "安全架构设计要点", "02", text[:800])
+
+    buf = io.BytesIO()
+    prs.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+def _build_security_summary(solution_content: dict, requirement: dict, customer_name: str) -> list[str]:
+    content = requirement.get("content", {})
+    compliance_list = content.get("compliance", ["等保三级"])
+    return [
+        f"**客户：{customer_name}**",
+        "",
+        f"• 合规要求：{'、'.join(compliance_list)}",
+        "• 行业监管：银保监会 / 人民银行 / 证监会",
+        "• 安全目标：满足金融行业网络安全等级保护标准",
+        "",
+        "**安全建设范围：**",
+        "• 身份认证与访问控制（RBAC / MFA）",
+        "• 网络微隔离与 API 网关安全",
+        "• 镜像扫描与供应链安全",
+        "• 运行时威胁检测与审计日志",
+        "• 数据传输与存储加密",
+    ]

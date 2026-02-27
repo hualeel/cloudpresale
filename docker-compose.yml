@@ -95,6 +95,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production-32chars!!}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DEFAULT_LLM: ${DEFAULT_LLM:-claude-sonnet-4-6}
+      CHROMA_HOST: chroma
+      CHROMA_PORT: 8000
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
     depends_on:
       postgres:
@@ -122,6 +124,8 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DEFAULT_LLM: ${DEFAULT_LLM:-claude-sonnet-4-6}
+      CHROMA_HOST: chroma
+      CHROMA_PORT: 8000
     depends_on:
       postgres:
         condition: service_healthy

@@ -3,6 +3,18 @@ import { useStore } from '../store/useStore'
 import { solutionsApi, requirementsApi, deliverablesApi } from '../api'
 import type { SolutionOut, RequirementOut, DeliverableOut, DlvType } from '../api/types'
 
+async function downloadPackage(solId: string, setPackaging: (id: string | null) => void) {
+  setPackaging(solId)
+  try {
+    const { url } = await deliverablesApi.packageUrl(solId)
+    window.open(url, '_blank')
+  } catch {
+    alert('打包下载失败（存储服务未连接或暂无就绪交付物）')
+  } finally {
+    setPackaging(null)
+  }
+}
+
 const DLV_ICON: Record<DlvType, string> = {
   word_tech: '📘', ppt_overview: '📊', ppt_container: '📑',
   ppt_devops: '📑', ppt_exec: '🎯', ppt_security: '🔐',
@@ -51,6 +63,7 @@ export function Deliverables() {
   const [filterType, setFilterType] = useState<string>('all')
   const [filterCustomer, setFilterCustomer] = useState<string>('all')
   const [downloading, setDownloading] = useState<string | null>(null)
+  const [packaging, setPackaging] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -176,6 +189,16 @@ export function Deliverables() {
                         <span className={`tag ${sol.is_current ? 'tag-g' : 'tag-gray'}`}>
                           {sol.is_current ? '当前版本' : '历史版本'}
                         </span>
+                        {sol.deliverables.some(d => d.status === 'ready') && (
+                          <button
+                            className="btn btn-ghost btn-xs"
+                            disabled={packaging === sol.id}
+                            onClick={() => downloadPackage(sol.id, setPackaging)}
+                            title="打包下载全部交付物（ZIP）"
+                          >
+                            {packaging === sol.id ? '打包中…' : '📦 打包下载'}
+                          </button>
+                        )}
                       </div>
                     </div>
 

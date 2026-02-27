@@ -8,9 +8,12 @@ const AGENT_LABEL: Record<AgentType, string> = {
   migration: '迁移路径 Agent', plan: '实施计划 Agent', pricing: '报价估算 Agent',
 }
 const DLV_OPTIONS = [
-  { key: 'word_tech', icon: '📘', name: 'Word技术方案', desc: '完整技术方案文档，供技术团队评审' },
-  { key: 'ppt_overview', icon: '📊', name: '总体方案PPT', desc: '面向IT管理层的技术方案演示' },
-  { key: 'ppt_exec', icon: '🎯', name: '高层汇报PPT', desc: '面向CIO/决策层的精简汇报版本' },
+  { key: 'word_tech',      icon: '📘', name: 'Word技术方案',    desc: '完整技术方案文档，供技术团队评审' },
+  { key: 'ppt_overview',  icon: '📊', name: '总体方案PPT',     desc: '面向IT管理层的技术方案演示' },
+  { key: 'ppt_exec',      icon: '🎯', name: '高层汇报PPT',     desc: '面向CIO/决策层的精简汇报版本' },
+  { key: 'ppt_container', icon: '📑', name: '容器平台专项PPT', desc: '面向IT基础架构团队，含架构与规格详情' },
+  { key: 'ppt_devops',    icon: '📑', name: 'DevOps专项PPT',   desc: '面向开发/DevOps团队，含迁移与实施计划' },
+  { key: 'ppt_security',  icon: '🔐', name: '安全合规专项PPT', desc: '面向安全团队/CISO，含等保合规详述' },
 ]
 
 export function Generate() {
@@ -20,7 +23,7 @@ export function Generate() {
   const [reqs, setReqs] = useState<RequirementOut[]>([])
   const [currentReqId, setCurrentReqId] = useState<string | null>(selectedReqId)
   const [changeNote, setChangeNote] = useState('')
-  const [dlvSelected, setDlvSelected] = useState([true, true, true])
+  const [dlvSelected, setDlvSelected] = useState([true, true, true, false, false, false])
 
   const [solId, setSolId] = useState<string | null>(null)
   const [progress, setProgress] = useState<SolutionProgress | null>(null)

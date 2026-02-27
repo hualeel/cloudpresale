@@ -15,7 +15,10 @@ export function K8s() {
           <div className="st">K8s 集群状态</div>
           <div className="ss2">presale-prod 命名空间</div>
         </div>
-        <button className="btn btn-ghost btn-sm">🔄 刷新</button>
+        <div className="fc g8">
+          <span className="tag tag-o txs">演示数据</span>
+          <button className="btn btn-ghost btn-sm">🔄 刷新</button>
+        </div>
       </div>
 
       <div className="three" style={{marginBottom:'18px'}}>
