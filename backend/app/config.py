@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     # LLM
     ANTHROPIC_API_KEY: str = ""
     DEFAULT_LLM: str = "claude-sonnet-4-6"
+    LLM_BASE_URL: str = ""  # 留空 = 直连 Anthropic；填 OpenRouter 等兼容地址即可切换
 
     # ChromaDB（RAG 知识库）
     CHROMA_HOST: str = "localhost"

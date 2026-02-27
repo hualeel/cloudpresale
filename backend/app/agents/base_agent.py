@@ -75,7 +75,10 @@ def run_single_agent(
     if rag_context:
         user_message = rag_context + "\n\n---\n\n" + user_message
 
-    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(
+        api_key=settings.ANTHROPIC_API_KEY,
+        **( {"base_url": settings.LLM_BASE_URL} if settings.LLM_BASE_URL else {} ),
+    )
 
     start_time = datetime.now(timezone.utc)
     collected_text = []
