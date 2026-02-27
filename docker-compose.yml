@@ -1,7 +1,7 @@
 # CloudPresale AI — 全栈一键部署
 # 用法:
-#   docker compose up -d                  # 使用 Docker Hub 预构建镜像
-#   docker compose --profile build up -d  # 本地构建镜像
+#   docker compose build              # 本地构建镜像
+#   docker compose up -d              # 启动所有服务（优先使用本地镜像，否则从 Hub 拉取）
 #
 # 首次启动后执行数据库初始化:
 #   docker compose exec api python scripts/init_db.py
@@ -81,7 +81,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      profiles: [build]
     container_name: presale-api
     restart: unless-stopped
     ports:
@@ -112,7 +111,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      profiles: [build]
     container_name: presale-worker
     restart: unless-stopped
     command: celery -A app.services.celery_app worker --loglevel=info --concurrency=4
@@ -140,7 +138,6 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-/api/v1}
-      profiles: [build]
     container_name: presale-frontend
     restart: unless-stopped
     ports:
