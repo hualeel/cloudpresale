@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../store/useStore'
 import { opportunitiesApi } from '../api'
 import type { KanbanColumn, OppStage } from '../api/types'
@@ -28,16 +28,43 @@ const STAGE_ICON: Record<OppStage, string> = {
 const VISIBLE_STAGES: OppStage[] = ['initial', 'req_confirm', 'proposal', 'customer_report']
 
 export function Kanban() {
-  const { setModal, setPage } = useStore()
+  const { setModal, setPage, setEditingItem } = useStore()
   const [board, setBoard] = useState<Record<string, KanbanColumn>>({})
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const fetchBoard = useCallback(() => {
+    setLoading(true)
     opportunitiesApi.kanban()
       .then(setBoard)
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    fetchBoard()
+  }, [fetchBoard])
+
+  // Listen for data refresh events (e.g. after edit/create)
+  useEffect(() => {
+    window.addEventListener('data:refresh', fetchBoard)
+    return () => window.removeEventListener('data:refresh', fetchBoard)
+  }, [fetchBoard])
+
+  async function handleDelete(id: string, name: string) {
+    if (!window.confirm(`确认删除商机「${name}」？此操作不可撤销。`)) return
+    try {
+      await opportunitiesApi.delete(id)
+      fetchBoard()
+    } catch (err) {
+      console.error(err)
+      alert('删除失败，请重试')
+    }
+  }
+
+  function handleEdit(opp: any) {
+    setEditingItem(opp)
+    setModal('editOpp')
+  }
 
   const totalCount = Object.values(board).reduce((s, c) => s + c.count, 0)
   const totalValue = Object.values(board)
@@ -85,6 +112,24 @@ export function Kanban() {
                       <div className="opp-ft">
                         <span className="opp-v">{fmt(opp.value)}</span>
                         <span className="opp-d">{relTime(opp.updated_at)}</span>
+                      </div>
+                      <div className="fc g8 mt4" style={{ justifyContent: 'flex-end' }}
+                        onClick={e => e.stopPropagation()}>
+                        <button
+                          className="btn btn-ghost btn-xs"
+                          onClick={() => handleEdit(opp)}
+                          title="编辑商机"
+                        >
+                          编辑
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-xs"
+                          style={{ color: 'var(--red, #e74c3c)' }}
+                          onClick={() => handleDelete(opp.id, opp.name)}
+                          title="删除商机"
+                        >
+                          删除
+                        </button>
                       </div>
                     </div>
                   ))}

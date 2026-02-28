@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../store/useStore'
 import { requirementsApi } from '../api'
 import type { RequirementOut, ReqStatus } from '../api/types'
@@ -20,24 +20,58 @@ function relTime(iso: string): string {
 }
 
 export function Requirements() {
-  const { setPage, setModal, setSelectedReqId } = useStore()
+  const { setPage, setModal, setSelectedReqId, setEditingItem } = useStore()
   const [reqs, setReqs] = useState<RequirementOut[]>([])
   const [selected, setSelected] = useState<RequirementOut | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const fetchReqs = useCallback(() => {
     requirementsApi.list()
       .then(data => {
         setReqs(data.items)
-        if (data.items.length > 0) setSelected(data.items[0])
+        if (data.items.length > 0) {
+          setSelected(prev => {
+            // Keep current selection if it still exists, otherwise use first
+            const still = data.items.find(r => r.id === prev?.id)
+            return still ?? data.items[0]
+          })
+        } else {
+          setSelected(null)
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    fetchReqs()
+  }, [fetchReqs])
+
+  // Listen for cross-page refresh events
+  useEffect(() => {
+    window.addEventListener('data:refresh', fetchReqs)
+    return () => window.removeEventListener('data:refresh', fetchReqs)
+  }, [fetchReqs])
+
   function handleGenerate(req: RequirementOut) {
     setSelectedReqId(req.id)
     setPage('generate')
+  }
+
+  function handleEdit(req: RequirementOut) {
+    setEditingItem(req)
+    setModal('editReq')
+  }
+
+  async function handleDelete(req: RequirementOut) {
+    if (!window.confirm(`确认删除需求「${req.title}」？此操作不可撤销。`)) return
+    try {
+      await requirementsApi.delete(req.id)
+      fetchReqs()
+    } catch (err) {
+      console.error(err)
+      alert('删除失败，请重试')
+    }
   }
 
   const content = selected?.content ?? {}
@@ -61,6 +95,9 @@ export function Requirements() {
             <span>📋</span>
             <span className="pt">{selected.customer_name} · {selected.opportunity_name} · 需求详情</span>
             <span className={`tag ${STATUS_TAG[selected.status]} ml-auto`}>{STATUS_LABEL[selected.status]}</span>
+            <button className="btn btn-ghost btn-sm" style={{ marginLeft: '9px' }} onClick={() => handleEdit(selected)}>
+              编辑
+            </button>
             <button className="btn btn-primary btn-sm" style={{ marginLeft: '9px' }} onClick={() => handleGenerate(selected)}>
               🤖 生成方案
             </button>
@@ -140,9 +177,21 @@ export function Requirements() {
                     <td><span className={`tag ${STATUS_TAG[req.status]}`}>{STATUS_LABEL[req.status]}</span></td>
                     <td className="txs tmu">{relTime(req.created_at)}</td>
                     <td>
-                      <button className="btn btn-primary btn-xs" onClick={e => { e.stopPropagation(); handleGenerate(req) }}>
-                        生成方案
-                      </button>
+                      <div className="fc g8" onClick={e => e.stopPropagation()}>
+                        <button className="btn btn-primary btn-xs" onClick={() => handleGenerate(req)}>
+                          生成方案
+                        </button>
+                        <button className="btn btn-ghost btn-xs" onClick={() => handleEdit(req)}>
+                          编辑
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-xs"
+                          style={{ color: 'var(--red, #e74c3c)' }}
+                          onClick={() => handleDelete(req)}
+                        >
+                          删除
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -3,7 +3,7 @@ import { setToken } from '../api/client'
 import type { UserOut } from '../api/types'
 
 type Page = 'dashboard' | 'kanban' | 'hierarchy' | 'requirements' | 'generate' | 'deliverables' | 'cicd' | 'k8s' | 'settings' | 'team'
-type Modal = 'newOpp' | 'newReq' | 'trigger' | 'pipelineDetail' | null
+type Modal = 'newOpp' | 'newReq' | 'trigger' | 'pipelineDetail' | 'editOpp' | 'editReq' | null
 
 interface AppState {
   // Navigation
@@ -13,6 +13,10 @@ interface AppState {
   setPage: (page: Page) => void
   setModal: (modal: Modal) => void
   setSelectedTreeRow: (row: string | null) => void
+
+  // Editing
+  editingItem: any | null
+  setEditingItem: (item: any) => void
 
   // Auth
   token: string | null
@@ -43,6 +47,10 @@ export const useStore = create<AppState>((set) => ({
   setPage: (page) => set({ currentPage: page }),
   setModal: (modal) => set({ openModal: modal }),
   setSelectedTreeRow: (row) => set({ selectedTreeRow: row }),
+
+  // Editing
+  editingItem: null,
+  setEditingItem: (item) => set({ editingItem: item }),
 
   // Auth
   token: storedToken,

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../store/useStore'
-import { dashboardApi } from '../api'
+import { dashboardApi, opportunitiesApi, requirementsApi } from '../api'
 import type { HierarchyCustomer, OppStage, ReqStatus, SolStatus } from '../api/types'
 
 function fmt(val: string | null | undefined): string {
@@ -32,7 +32,7 @@ const SOL_TAG: Record<SolStatus, string> = {
 type SelId = string | null
 
 export function Hierarchy() {
-  const { setPage, setModal, setSelectedReqId, setSelectedSolId } = useStore()
+  const { setPage, setModal, setSelectedReqId, setSelectedSolId, setEditingItem } = useStore()
   const [tree, setTree] = useState<HierarchyCustomer[]>([])
   const [loading, setLoading] = useState(true)
   const [selId, setSelId] = useState<SelId>(null)
@@ -41,21 +41,33 @@ export function Hierarchy() {
   const [detailType, setDetailType] = useState<'opp' | 'req' | 'sol' | null>(null)
   const [detail, setDetail] = useState<Record<string, unknown>>({})
 
-  useEffect(() => {
+  const fetchTree = useCallback(() => {
     dashboardApi.hierarchy()
       .then(data => {
         setTree(data)
-        // 默认选中第一个商机
-        if (data[0]?.opportunities[0]) {
-          const opp = data[0].opportunities[0]
-          setSelId(`opp-${opp.id}`)
-          setDetailType('opp')
-          setDetail({ ...opp, customer_name: data[0].name })
-        }
+        // 默认选中第一个商机（仅初次加载时）
+        setSelId(prev => {
+          if (prev === null && data[0]?.opportunities[0]) {
+            const opp = data[0].opportunities[0]
+            setDetailType('opp')
+            setDetail({ ...opp, customer_name: data[0].name })
+            return `opp-${opp.id}`
+          }
+          return prev
+        })
       })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    fetchTree()
+  }, [fetchTree])
+
+  useEffect(() => {
+    window.addEventListener('data:refresh', fetchTree)
+    return () => window.removeEventListener('data:refresh', fetchTree)
+  }, [fetchTree])
 
   function selectNode(type: 'opp' | 'req' | 'sol', id: string, data: Record<string, unknown>) {
     setSelId(`${type}-${id}`)
@@ -63,6 +75,50 @@ export function Hierarchy() {
     setDetail(data)
     if (type === 'req') setSelectedReqId(id)
     if (type === 'sol') setSelectedSolId(id)
+  }
+
+  function handleEditOpp() {
+    setEditingItem(detail)
+    setModal('editOpp')
+  }
+
+  function handleEditReq() {
+    setEditingItem(detail)
+    setModal('editReq')
+  }
+
+  async function handleDeleteOpp() {
+    const name = String(detail.name ?? '')
+    const id = String(detail.id ?? '')
+    if (!id) return
+    if (!window.confirm(`确认删除商机「${name}」？此操作不可撤销。`)) return
+    try {
+      await opportunitiesApi.delete(id)
+      setSelId(null)
+      setDetailType(null)
+      setDetail({})
+      window.dispatchEvent(new Event('data:refresh'))
+    } catch (err) {
+      console.error(err)
+      alert('删除失败，请重试')
+    }
+  }
+
+  async function handleDeleteReq() {
+    const title = String(detail.title ?? '')
+    const id = String(detail.id ?? '')
+    if (!id) return
+    if (!window.confirm(`确认删除需求「${title}」？此操作不可撤销。`)) return
+    try {
+      await requirementsApi.delete(id)
+      setSelId(null)
+      setDetailType(null)
+      setDetail({})
+      window.dispatchEvent(new Event('data:refresh'))
+    } catch (err) {
+      console.error(err)
+      alert('删除失败，请重试')
+    }
   }
 
   return (
@@ -164,12 +220,34 @@ export function Hierarchy() {
               {!detailType && '请从左侧选择节点'}
             </div>
           </div>
-          {detailType === 'opp' && (
-            <button className="btn btn-primary btn-sm" onClick={() => { setPage('generate'); setSelectedReqId(null) }}>🤖 生成方案</button>
-          )}
-          {detailType === 'req' && (
-            <button className="btn btn-primary btn-sm" onClick={() => setPage('generate')}>🤖 生成方案</button>
-          )}
+          <div className="fc g8">
+            {detailType === 'opp' && (
+              <>
+                <button className="btn btn-ghost btn-sm" onClick={handleEditOpp}>编辑</button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ color: 'var(--red, #e74c3c)' }}
+                  onClick={handleDeleteOpp}
+                >
+                  删除
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={() => { setPage('generate'); setSelectedReqId(null) }}>🤖 生成方案</button>
+              </>
+            )}
+            {detailType === 'req' && (
+              <>
+                <button className="btn btn-ghost btn-sm" onClick={handleEditReq}>编辑</button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ color: 'var(--red, #e74c3c)' }}
+                  onClick={handleDeleteReq}
+                >
+                  删除
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={() => setPage('generate')}>🤖 生成方案</button>
+              </>
+            )}
+          </div>
         </div>
 
         {detailType === 'opp' && (

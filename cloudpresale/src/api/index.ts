@@ -39,6 +39,7 @@ export const customersApi = {
   create: (data: { name: string; industry: string; tier?: string; description?: string }) =>
     api.post<CustomerOut>('/customers', data),
   get: (id: string) => api.get<CustomerOut>(`/customers/${id}`),
+  delete: (id: string) => api.delete(`/customers/${id}`),
 }
 
 // ── Opportunities ─────────────────────────────────────
@@ -57,6 +58,7 @@ export const opportunitiesApi = {
   }) => api.post<OpportunityOut>('/opportunities', data),
   update: (id: string, data: Partial<OpportunityOut>) =>
     api.patch<OpportunityOut>(`/opportunities/${id}`, data),
+  delete: (id: string) => api.delete(`/opportunities/${id}`),
 }
 
 // ── Requirements ─────────────────────────────────────
@@ -76,6 +78,7 @@ export const requirementsApi = {
   confirm: (id: string) => api.post<RequirementOut>(`/requirements/${id}/confirm`, {}),
   update: (id: string, data: Partial<RequirementOut>) =>
     api.patch<RequirementOut>(`/requirements/${id}`, data),
+  delete: (id: string) => api.delete(`/requirements/${id}`),
 }
 
 // ── Solutions ─────────────────────────────────────────

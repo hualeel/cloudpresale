@@ -14,7 +14,10 @@ function toggle(arr: string[], val: string): string[] {
 }
 
 export function NewRequirementModal() {
-  const { openModal, setModal, setSelectedReqId, setPage } = useStore()
+  const { openModal, setModal, setSelectedReqId, setPage, editingItem } = useStore()
+  const isEditMode = openModal === 'editReq'
+  const isOpen = openModal === 'newReq' || isEditMode
+
   const [opps, setOpps] = useState<OpportunityOut[]>([])
   const [oppId, setOppId] = useState<string>('')
   const [title, setTitle] = useState('')
@@ -31,16 +34,34 @@ export function NewRequirementModal() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (openModal !== 'newReq') return
-    opportunitiesApi.list()
-      .then(data => {
-        setOpps(data.items)
-        if (data.items.length > 0 && !oppId) setOppId(data.items[0].id)
-      })
-      .catch(console.error)
-  }, [openModal])
+    if (!isOpen) return
+    if (isEditMode) {
+      // Edit mode: pre-fill from editingItem
+      if (editingItem) {
+        setTitle(editingItem.title ?? '')
+        const c = editingItem.content ?? {}
+        setCurrentContainer(c.current_containerization ?? '20-50%')
+        setTargetContainer(c.target_containerization ?? '80%+')
+        setClusterCount(c.cluster_count ?? '')
+        setBudgetRange(c.budget_range ?? '')
+        setDecisionTimeline(c.decision_timeline ?? '')
+        setCompliance(Array.isArray(c.compliance) ? c.compliance : ['等保三级', '信创适配', '金融监管合规'])
+        setModules(Array.isArray(c.modules) ? c.modules : ['容器平台', 'DevOps平台', '微服务治理', '中间件服务'])
+        setPainPoints(c.pain_points ?? '')
+        setRawInput('')
+      }
+    } else {
+      // New mode: load opportunity list
+      opportunitiesApi.list()
+        .then(data => {
+          setOpps(data.items)
+          if (data.items.length > 0 && !oppId) setOppId(data.items[0].id)
+        })
+        .catch(console.error)
+    }
+  }, [isOpen, isEditMode])
 
-  if (openModal !== 'newReq') return null
+  if (!isOpen) return null
 
   function reset() {
     setTitle(''); setPainPoints(''); setRawInput(''); setError('')
@@ -53,37 +74,65 @@ export function NewRequirementModal() {
   function close() { reset(); setModal(null) }
 
   async function handleSubmit(goGenerate: boolean) {
-    if (!oppId) { setError('请选择关联商机'); return }
-    if (!title.trim()) { setError('请填写需求标题'); return }
-    setError('')
-    setLoading(true)
-    try {
-      const req = await requirementsApi.create({
-        opportunity_id: oppId,
-        title: title.trim(),
-        content: {
-          current_containerization: currentContainer,
-          target_containerization: targetContainer,
-          cluster_count: clusterCount || undefined,
-          budget_range: budgetRange || undefined,
-          decision_timeline: decisionTimeline || undefined,
-          compliance,
-          modules,
-          pain_points: painPoints || undefined,
-        },
-        raw_input: rawInput.trim() || undefined,
-      })
-      reset()
-      setModal(null)
-      if (goGenerate) {
-        setSelectedReqId(req.id)
-        setPage('generate')
+    if (isEditMode) {
+      if (!title.trim()) { setError('请填写需求标题'); return }
+      setError('')
+      setLoading(true)
+      try {
+        await requirementsApi.update(editingItem.id, {
+          title: title.trim(),
+          content: {
+            current_containerization: currentContainer,
+            target_containerization: targetContainer,
+            cluster_count: clusterCount || undefined,
+            budget_range: budgetRange || undefined,
+            decision_timeline: decisionTimeline || undefined,
+            compliance,
+            modules,
+            pain_points: painPoints || undefined,
+          },
+        } as any)
+        reset()
+        setModal(null)
+        window.dispatchEvent(new Event('data:refresh'))
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : '更新失败，请重试')
+      } finally {
+        setLoading(false)
       }
-      window.dispatchEvent(new Event('data:refresh'))
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '创建失败，请重试')
-    } finally {
-      setLoading(false)
+    } else {
+      if (!oppId) { setError('请选择关联商机'); return }
+      if (!title.trim()) { setError('请填写需求标题'); return }
+      setError('')
+      setLoading(true)
+      try {
+        const req = await requirementsApi.create({
+          opportunity_id: oppId,
+          title: title.trim(),
+          content: {
+            current_containerization: currentContainer,
+            target_containerization: targetContainer,
+            cluster_count: clusterCount || undefined,
+            budget_range: budgetRange || undefined,
+            decision_timeline: decisionTimeline || undefined,
+            compliance,
+            modules,
+            pain_points: painPoints || undefined,
+          },
+          raw_input: rawInput.trim() || undefined,
+        })
+        reset()
+        setModal(null)
+        if (goGenerate) {
+          setSelectedReqId(req.id)
+          setPage('generate')
+        }
+        window.dispatchEvent(new Event('data:refresh'))
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : '创建失败，请重试')
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
@@ -91,21 +140,23 @@ export function NewRequirementModal() {
     <div className="mo open" onClick={(e) => { if (e.target === e.currentTarget) close() }}>
       <div className="modal wide">
         <div className="mh">
-          <div className="mt_">新建需求</div>
+          <div className="mt_">{isEditMode ? '编辑需求' : '新建需求'}</div>
           <button className="mc-" onClick={close}>×</button>
         </div>
         <div className="mb_">
           {error && <div className="alert a-err" style={{ marginBottom: '10px' }}>{error}</div>}
           <div className="fgrid">
-            <div className="fg">
-              <div className="fl">关联商机 *</div>
-              <select className="fs" value={oppId} onChange={e => setOppId(e.target.value)}>
-                {opps.length === 0 && <option value="">暂无商机，请先新建</option>}
-                {opps.map(o => (
-                  <option key={o.id} value={o.id}>{o.customer_name} · {o.name}</option>
-                ))}
-              </select>
-            </div>
+            {!isEditMode && (
+              <div className="fg">
+                <div className="fl">关联商机 *</div>
+                <select className="fs" value={oppId} onChange={e => setOppId(e.target.value)}>
+                  {opps.length === 0 && <option value="">暂无商机，请先新建</option>}
+                  {opps.map(o => (
+                    <option key={o.id} value={o.id}>{o.customer_name} · {o.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="fg">
               <div className="fl">需求标题 *</div>
               <input className="fi" placeholder="例如：容器平台建设需求 v1.0"
@@ -165,22 +216,32 @@ export function NewRequirementModal() {
               <textarea className="ft" placeholder="描述客户的核心痛点、业务目标…"
                 style={{ minHeight: '72px' }} value={painPoints} onChange={e => setPainPoints(e.target.value)} />
             </div>
-            <div className="fg full">
-              <div className="fl">沟通记录（AI自动解析）</div>
-              <textarea className="ft" style={{ minHeight: '90px' }}
-                placeholder="粘贴会议纪要、微信截图文字、RFP原文…"
-                value={rawInput} onChange={e => setRawInput(e.target.value)} />
-            </div>
+            {!isEditMode && (
+              <div className="fg full">
+                <div className="fl">沟通记录（AI自动解析）</div>
+                <textarea className="ft" style={{ minHeight: '90px' }}
+                  placeholder="粘贴会议纪要、微信截图文字、RFP原文…"
+                  value={rawInput} onChange={e => setRawInput(e.target.value)} />
+              </div>
+            )}
           </div>
         </div>
         <div className="mf">
           <button className="btn btn-ghost" onClick={close} disabled={loading}>取消</button>
-          <button className="btn btn-ghost" onClick={() => handleSubmit(false)} disabled={loading}>
-            {loading ? '保存中…' : '仅保存需求'}
-          </button>
-          <button className="btn btn-primary" onClick={() => handleSubmit(true)} disabled={loading}>
-            {loading ? '保存中…' : '保存 → 生成方案'}
-          </button>
+          {isEditMode ? (
+            <button className="btn btn-primary" onClick={() => handleSubmit(false)} disabled={loading}>
+              {loading ? '保存中…' : '保存修改'}
+            </button>
+          ) : (
+            <>
+              <button className="btn btn-ghost" onClick={() => handleSubmit(false)} disabled={loading}>
+                {loading ? '保存中…' : '仅保存需求'}
+              </button>
+              <button className="btn btn-primary" onClick={() => handleSubmit(true)} disabled={loading}>
+                {loading ? '保存中…' : '保存 → 生成方案'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
