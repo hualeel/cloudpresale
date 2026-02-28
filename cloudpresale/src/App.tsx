@@ -14,6 +14,7 @@ import { CICD } from './pages/CICD'
 import { K8s } from './pages/K8s'
 import { Settings } from './pages/Settings'
 import { Team } from './pages/Team'
+import { NewCustomerModal } from './components/modals/NewCustomerModal'
 import { NewOpportunityModal } from './components/modals/NewOpportunityModal'
 import { NewRequirementModal } from './components/modals/NewRequirementModal'
 import { TriggerModal } from './components/modals/TriggerModal'
@@ -53,6 +54,7 @@ function App() {
           {pages[currentPage]}
         </div>
       </main>
+      <NewCustomerModal />
       <NewOpportunityModal />
       <NewRequirementModal />
       <TriggerModal />

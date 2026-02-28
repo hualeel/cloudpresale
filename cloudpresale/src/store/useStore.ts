@@ -3,7 +3,7 @@ import { setToken } from '../api/client'
 import type { UserOut } from '../api/types'
 
 type Page = 'dashboard' | 'kanban' | 'hierarchy' | 'requirements' | 'generate' | 'deliverables' | 'cicd' | 'k8s' | 'settings' | 'team'
-type Modal = 'newOpp' | 'newReq' | 'trigger' | 'pipelineDetail' | 'editOpp' | 'editReq' | null
+type Modal = 'newCustomer' | 'newOpp' | 'newReq' | 'trigger' | 'pipelineDetail' | 'editOpp' | 'editReq' | null
 
 interface AppState {
   // Navigation
@@ -30,6 +30,10 @@ interface AppState {
   selectedSolId: string | null
   setSelectedReqId: (id: string | null) => void
   setSelectedSolId: (id: string | null) => void
+
+  // Pre-select customer when opening newOpp modal from a customer context
+  newOppCustomerId: string | null
+  setNewOppCustomerId: (id: string | null) => void
 }
 
 // 从 localStorage 恢复 token
@@ -72,4 +76,7 @@ export const useStore = create<AppState>((set) => ({
   selectedSolId: null,
   setSelectedReqId: (id) => set({ selectedReqId: id }),
   setSelectedSolId: (id) => set({ selectedSolId: id }),
+
+  newOppCustomerId: null,
+  setNewOppCustomerId: (id) => set({ newOppCustomerId: id }),
 }))

@@ -32,7 +32,7 @@ const SOL_TAG: Record<SolStatus, string> = {
 type SelId = string | null
 
 export function Hierarchy() {
-  const { setPage, setModal, setSelectedReqId, setSelectedSolId, setEditingItem } = useStore()
+  const { setPage, setModal, setSelectedReqId, setSelectedSolId, setEditingItem, setNewOppCustomerId } = useStore()
   const [tree, setTree] = useState<HierarchyCustomer[]>([])
   const [loading, setLoading] = useState(true)
   const [selId, setSelId] = useState<SelId>(null)
@@ -147,7 +147,16 @@ export function Hierarchy() {
             <div className="st">客户 · 商机 · 需求 · 方案</div>
             <div className="ss2">四维层级统一管理</div>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={() => setModal('newOpp')}>＋ 新建</button>
+          <div className="fc g8">
+            <button className="btn btn-ghost btn-sm" onClick={() => setModal('newCustomer')}>＋ 客户</button>
+            <button className="btn btn-primary btn-sm" onClick={() => {
+              // Pre-select customer if current context is a customer or opp node
+              const ctxId = detailType === 'cust' ? String(detail.id ?? '')
+                : detailType === 'opp' ? String(detail.customer_id ?? '') : ''
+              setNewOppCustomerId(ctxId || null)
+              setModal('newOpp')
+            }}>＋ 商机</button>
+          </div>
         </div>
         <div className="fc g8 mt4" style={{ marginBottom: '11px', flexWrap: 'wrap' }}>
           <span className="tag dim-c">🏦 客户</span>

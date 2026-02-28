@@ -89,7 +89,10 @@ export function Kanban() {
             {loading ? '加载中…' : `${totalCount} 个活跃商机 · 预估总额 ${fmt(String(totalValue))}`}
           </div>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => setModal('newOpp')}>＋ 新建商机</button>
+        <div className="fc g8">
+          <button className="btn btn-ghost btn-sm" onClick={() => setModal('newCustomer')}>＋ 新建客户</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setModal('newOpp')}>＋ 新建商机</button>
+        </div>
       </div>
 
       {loading ? (
