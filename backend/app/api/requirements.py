@@ -21,6 +21,10 @@ def _to_out(req: Requirement, db: Session) -> RequirementOut:
     sol_count = db.query(func.count(Solution.id)).filter(Solution.requirement_id == req.id).scalar()
     out = RequirementOut.model_validate(req)
     out.solution_count = sol_count or 0
+    if req.opportunity:
+        out.opportunity_name = req.opportunity.name
+        if req.opportunity.customer:
+            out.customer_name = req.opportunity.customer.name
     return out
 
 

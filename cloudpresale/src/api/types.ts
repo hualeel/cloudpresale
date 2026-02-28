@@ -88,8 +88,8 @@ export interface KanbanColumn {
 export interface RequirementOut {
   id: string
   opportunity_id: string
-  opportunity_name: string
-  customer_name: string
+  opportunity_name: string | null
+  customer_name: string | null
   version: number
   title: string
   status: ReqStatus

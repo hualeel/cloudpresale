@@ -39,6 +39,8 @@ class RequirementOut(BaseModel):
 
     id: uuid.UUID
     opportunity_id: uuid.UUID
+    opportunity_name: str | None = None
+    customer_name: str | None = None
     version: int
     title: str
     status: RequirementStatus
