@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../store/useStore'
-import { dashboardApi, opportunitiesApi, requirementsApi } from '../api'
+import { dashboardApi, customersApi, opportunitiesApi, requirementsApi } from '../api'
 import type { HierarchyCustomer, OppStage, ReqStatus, SolStatus } from '../api/types'
 
 function fmt(val: string | null | undefined): string {
@@ -38,7 +38,7 @@ export function Hierarchy() {
   const [selId, setSelId] = useState<SelId>(null)
 
   // 选中节点的详情
-  const [detailType, setDetailType] = useState<'opp' | 'req' | 'sol' | null>(null)
+  const [detailType, setDetailType] = useState<'cust' | 'opp' | 'req' | 'sol' | null>(null)
   const [detail, setDetail] = useState<Record<string, unknown>>({})
 
   const fetchTree = useCallback(() => {
@@ -69,7 +69,7 @@ export function Hierarchy() {
     return () => window.removeEventListener('data:refresh', fetchTree)
   }, [fetchTree])
 
-  function selectNode(type: 'opp' | 'req' | 'sol', id: string, data: Record<string, unknown>) {
+  function selectNode(type: 'cust' | 'opp' | 'req' | 'sol', id: string, data: Record<string, unknown>) {
     setSelId(`${type}-${id}`)
     setDetailType(type)
     setDetail(data)
@@ -121,6 +121,23 @@ export function Hierarchy() {
     }
   }
 
+  async function handleDeleteCust() {
+    const name = String(detail.name ?? '')
+    const id = String(detail.id ?? '')
+    if (!id) return
+    if (!window.confirm(`确认删除客户「${name}」？\n旗下所有商机、需求与方案将同步删除，此操作不可撤销。`)) return
+    try {
+      await customersApi.delete(id)
+      setSelId(null)
+      setDetailType(null)
+      setDetail({})
+      window.dispatchEvent(new Event('data:refresh'))
+    } catch (err) {
+      console.error(err)
+      alert('删除失败，请重试')
+    }
+  }
+
   return (
     <div className="two" style={{ alignItems: 'start' }}>
       {/* LEFT: Tree */}
@@ -148,7 +165,7 @@ export function Hierarchy() {
                 {/* Customer */}
                 <div
                   className={`tree-row${selId === `cust-${cust.id}` ? ' sel' : ''}`}
-                  onClick={() => selectNode('opp', cust.id, { type: 'customer', ...cust })}
+                  onClick={() => selectNode('cust', cust.id, { ...cust })}
                   style={{ marginTop: '4px' }}
                 >
                   <span className="tree-ico">🏦</span>
@@ -214,6 +231,7 @@ export function Hierarchy() {
           <div>
             <div className="st">节点详情</div>
             <div className="ss2 txs tmu">
+              {detailType === 'cust' && String(detail.name ?? '')}
               {detailType === 'opp' && `${String(detail.customer_name ?? '')} · ${String(detail.name ?? '')}`}
               {detailType === 'req' && `${String(detail.customer_name ?? '')} · ${String(detail.title ?? '')}`}
               {detailType === 'sol' && `${String(detail.customer_name ?? '')} · v${String(detail.version ?? '')}`}
@@ -221,6 +239,15 @@ export function Hierarchy() {
             </div>
           </div>
           <div className="fc g8">
+            {detailType === 'cust' && (
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ color: 'var(--red, #e74c3c)' }}
+                onClick={handleDeleteCust}
+              >
+                删除客户
+              </button>
+            )}
             {detailType === 'opp' && (
               <>
                 <button className="btn btn-ghost btn-sm" onClick={handleEditOpp}>编辑</button>
@@ -249,6 +276,20 @@ export function Hierarchy() {
             )}
           </div>
         </div>
+
+        {detailType === 'cust' && (
+          <div className="panel mt4">
+            <div className="ph"><span>🏦</span><span className="pt">客户信息</span></div>
+            <div className="pb-">
+              <div className="fgrid">
+                <div className="fg"><div className="fl">客户名称</div><div className="ts">{String(detail.name ?? '—')}</div></div>
+                <div className="fg"><div className="fl">行业</div><div className="ts">{String(detail.industry ?? '—')}</div></div>
+                <div className="fg"><div className="fl">层级</div><div className="ts">{String(detail.tier ?? '—')}</div></div>
+                <div className="fg"><div className="fl">商机数量</div><div className="ts fw6">{Array.isArray(detail.opportunities) ? detail.opportunities.length : 0} 个</div></div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {detailType === 'opp' && (
           <div className="panel mt4">
