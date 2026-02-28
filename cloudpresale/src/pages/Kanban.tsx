@@ -51,13 +51,22 @@ export function Kanban() {
   }, [fetchBoard])
 
   async function handleDelete(id: string, name: string) {
-    if (!window.confirm(`确认删除商机「${name}」？此操作不可撤销。`)) return
+    if (!window.confirm(`确认删除商机「${name}」？\n关联的需求与方案将同步删除，此操作不可撤销。`)) return
+    // Optimistic: remove card immediately, no blank-card flicker
+    setBoard(prev => {
+      const next: Record<string, KanbanColumn> = {}
+      for (const [stage, col] of Object.entries(prev)) {
+        const items = col.items.filter(o => o.id !== id)
+        next[stage] = { ...col, items, count: col.count - (col.items.length - items.length) }
+      }
+      return next
+    })
     try {
       await opportunitiesApi.delete(id)
-      fetchBoard()
     } catch (err) {
       console.error(err)
       alert('删除失败，请重试')
+      fetchBoard() // restore on failure
     }
   }
 

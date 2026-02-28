@@ -91,7 +91,7 @@ export function Hierarchy() {
     const name = String(detail.name ?? '')
     const id = String(detail.id ?? '')
     if (!id) return
-    if (!window.confirm(`确认删除商机「${name}」？此操作不可撤销。`)) return
+    if (!window.confirm(`确认删除商机「${name}」？\n关联的需求与方案将同步删除，此操作不可撤销。`)) return
     try {
       await opportunitiesApi.delete(id)
       setSelId(null)
@@ -108,7 +108,7 @@ export function Hierarchy() {
     const title = String(detail.title ?? '')
     const id = String(detail.id ?? '')
     if (!id) return
-    if (!window.confirm(`确认删除需求「${title}」？此操作不可撤销。`)) return
+    if (!window.confirm(`确认删除需求「${title}」？\n关联的方案将同步删除，此操作不可撤销。`)) return
     try {
       await requirementsApi.delete(id)
       setSelId(null)

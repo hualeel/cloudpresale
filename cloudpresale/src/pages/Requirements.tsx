@@ -64,13 +64,17 @@ export function Requirements() {
   }
 
   async function handleDelete(req: RequirementOut) {
-    if (!window.confirm(`确认删除需求「${req.title}」？此操作不可撤销。`)) return
+    if (!window.confirm(`确认删除需求「${req.title}」？\n关联的方案将同步删除，此操作不可撤销。`)) return
+    // Optimistic: remove immediately
+    const remaining = reqs.filter(r => r.id !== req.id)
+    setReqs(remaining)
+    if (selected?.id === req.id) setSelected(remaining.length > 0 ? remaining[0] : null)
     try {
       await requirementsApi.delete(req.id)
-      fetchReqs()
     } catch (err) {
       console.error(err)
       alert('删除失败，请重试')
+      fetchReqs() // restore on failure
     }
   }
 
