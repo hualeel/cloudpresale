@@ -44,8 +44,8 @@ export function NewOpportunityModal() {
       setOppName(editingItem.name ?? '')
       setOppStage(editingItem.stage ?? 'initial')
       setValue(editingItem.value ?? '')
-      setCloseDate(editingItem.close_date ?? '')
-      setDescription(editingItem.description ?? '')
+      setCloseDate(editingItem.expected_close ?? '')
+      setDescription(editingItem.key_requirements ?? '')
     }
   }, [isEditMode, editingItem])
 
@@ -75,9 +75,9 @@ export function NewOpportunityModal() {
         await opportunitiesApi.update(editingItem.id, {
           name: oppName.trim(),
           stage: oppStage as any,
-          amount: numValue,
-          close_date: closeDate.trim() || undefined,
-          description: description.trim() || undefined,
+          value: numValue,
+          expected_close: closeDate.trim() || undefined,
+          key_requirements: description.trim() || undefined,
         } as any)
         close()
         window.dispatchEvent(new Event('data:refresh'))
