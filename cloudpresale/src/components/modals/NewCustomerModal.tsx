@@ -5,7 +5,7 @@ import type { Industry } from '../../api/types'
 
 const INDUSTRY_OPTIONS: { value: Industry; label: string }[] = [
   { value: 'bank_state', label: '银行（国有大行）' },
-  { value: 'bank_joint', label: '银行（股份制）' },
+  { value: 'bank_commercial', label: '银行（股份制）' },
   { value: 'bank_city', label: '银行（城商行/农商行）' },
   { value: 'insurance', label: '保险' },
   { value: 'securities', label: '券商' },

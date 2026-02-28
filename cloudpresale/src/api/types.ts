@@ -1,6 +1,6 @@
 // ── 枚举 ─────────────────────────────────────────────
 export type UserRole = 'admin' | 'senior_sa' | 'sa' | 'junior_sa'
-export type Industry = 'bank_state' | 'bank_joint' | 'bank_city' | 'insurance' | 'securities' | 'fund' | 'other'
+export type Industry = 'bank_state' | 'bank_commercial' | 'bank_city' | 'insurance' | 'securities' | 'fund' | 'other'
 export type OppStage = 'initial' | 'req_confirm' | 'proposal' | 'customer_report' | 'won' | 'lost'
 export type ReqStatus = 'draft' | 'confirmed' | 'archived'
 export type SolStatus = 'generating' | 'draft' | 'reviewing' | 'approved' | 'archived' | 'completed' | 'failed'
@@ -15,7 +15,7 @@ export const STAGE_LABEL: Record<OppStage, string> = {
   customer_report: '客户汇报', won: '已赢单', lost: '已输单',
 }
 export const INDUSTRY_LABEL: Record<Industry, string> = {
-  bank_state: '国有大行', bank_joint: '股份制银行', bank_city: '城商行/农商行',
+  bank_state: '国有大行', bank_commercial: '股份制银行', bank_city: '城商行/农商行',
   insurance: '保险', securities: '证券', fund: '基金', other: '其他',
 }
 export const AGENT_LABEL: Record<AgentType, string> = {

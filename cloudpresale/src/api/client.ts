@@ -45,7 +45,12 @@ async function request<T>(
     let detail = `HTTP ${resp.status}`
     try {
       const err = await resp.json()
-      detail = err.detail ?? detail
+      if (typeof err.detail === 'string') {
+        detail = err.detail
+      } else if (Array.isArray(err.detail)) {
+        // FastAPI validation errors: [{loc, msg, type}, ...]
+        detail = err.detail.map((e: { msg?: string }) => e.msg ?? '').filter(Boolean).join('；') || detail
+      }
     } catch { /* ignore */ }
     throw new ApiError(resp.status, detail)
   }
