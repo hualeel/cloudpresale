@@ -4,7 +4,7 @@ interface NavItem { id: string; icon: string; label: string; badge?: string; bad
 const navItems: { section: string; items: NavItem[] }[] = [
   { section: '工作台', items: [
     { id: 'dashboard', icon: '🏠', label: '总览仪表盘' },
-    { id: 'kanban', icon: '📊', label: '商机看板', badge: '7', badgeCls: 'o' },
+    { id: 'kanban', icon: '📊', label: '方案看板' },
   ]},
   { section: '四维管理', items: [
     { id: 'hierarchy', icon: '🗂️', label: '客户·商机·需求·方案' },

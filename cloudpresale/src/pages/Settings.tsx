@@ -8,7 +8,16 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   )
 }
 
-const LLM_MODELS = ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5-20251001']
+const CLAUDE_MODELS = [
+  { value: 'claude-sonnet-4-6',        label: 'Claude Sonnet 4.6（推荐）' },
+  { value: 'claude-opus-4-6',          label: 'Claude Opus 4.6（最强）' },
+  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5（最快）' },
+]
+
+const DEEPSEEK_MODELS = [
+  { value: 'deepseek-chat',     label: 'DeepSeek-V3（通用对话）' },
+  { value: 'deepseek-reasoner', label: 'DeepSeek-R1（推理增强）' },
+]
 
 export function Settings() {
   const [system, setSystem] = useState<SystemConfig>({
@@ -20,20 +29,48 @@ export function Settings() {
     auto_knowledge_base: true,
     max_concurrent_generations: 5,
   })
-  const [anthropicConfigured, setAnthropicConfigured] = useState(false)
+
+  // ── Anthropic Claude state ──────────────────────────
+  const [claudeModel, setClaudeModel] = useState('claude-sonnet-4-6')
+  const [apiKeyInput, setApiKeyInput] = useState('')
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false)
   const [llmConnected, setLlmConnected] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [showKey, setShowKey] = useState(false)
+  const [savingLlm, setSavingLlm] = useState(false)
+  const [llmSaveMsg, setLlmSaveMsg] = useState('')
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<LLMTestResult | null>(null)
+
+  // ── DeepSeek state ──────────────────────────────────
+  const [deepseekModel, setDeepseekModel] = useState('deepseek-chat')
+  const [deepseekKeyInput, setDeepseekKeyInput] = useState('')
+  const [deepseekKeyConfigured, setDeepseekKeyConfigured] = useState(false)
+  const [deepseekConnected, setDeepseekConnected] = useState(false)
+  const [showDeepseekKey, setShowDeepseekKey] = useState(false)
+  const [savingDeepseek, setSavingDeepseek] = useState(false)
+  const [deepseekSaveMsg, setDeepseekSaveMsg] = useState('')
+  const [testingDeepseek, setTestingDeepseek] = useState(false)
+  const [deepseekTestResult, setDeepseekTestResult] = useState<LLMTestResult | null>(null)
+
+  // ── System config state ─────────────────────────────
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
 
   useEffect(() => {
     settingsApi.get()
       .then(data => {
         setSystem(data.system)
-        setAnthropicConfigured(data.llm.anthropic_configured)
-        setLlmConnected(data.llm.status === 'connected')
+        setApiKeyConfigured(data.llm.anthropic_configured)
+        setDeepseekKeyConfigured(data.llm.deepseek_configured)
+        const isDeepseek = data.system.default_llm.startsWith('deepseek')
+        if (isDeepseek) {
+          setDeepseekModel(data.system.default_llm)
+          setDeepseekConnected(data.llm.status === 'connected')
+        } else {
+          setClaudeModel(data.system.default_llm)
+          setLlmConnected(data.llm.status === 'connected')
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false))
@@ -43,7 +80,89 @@ export function Settings() {
     setSystem(s => ({ ...s, [key]: val }))
   }
 
-  async function handleSave() {
+  // ── Claude handlers ─────────────────────────────────
+  async function handleSaveLlm() {
+    setSavingLlm(true)
+    setLlmSaveMsg('')
+    setTestResult(null)
+    try {
+      const payload: { anthropic_api_key?: string; default_model?: string } = {
+        default_model: claudeModel,
+      }
+      if (apiKeyInput.trim()) payload.anthropic_api_key = apiKeyInput.trim()
+      const llm = await settingsApi.updateLlm(payload)
+      setApiKeyConfigured(llm.anthropic_configured)
+      setLlmConnected(llm.status === 'connected')
+      setSystem(s => ({ ...s, default_llm: claudeModel }))
+      if (apiKeyInput.trim()) setApiKeyInput('')
+      setLlmSaveMsg('ok')
+    } catch (err: unknown) {
+      setLlmSaveMsg('err: ' + (err instanceof Error ? err.message : '保存失败'))
+    } finally {
+      setSavingLlm(false)
+      setTimeout(() => setLlmSaveMsg(''), 4000)
+    }
+  }
+
+  async function handleTestLlm() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const r = await settingsApi.testLlm({
+        provider: 'anthropic',
+        api_key: apiKeyInput.trim() || undefined,
+      })
+      setTestResult(r)
+      if (r.ok) setLlmConnected(true)
+    } catch {
+      setTestResult({ ok: false, model: claudeModel, latency_ms: null, error: '请求失败' })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  // ── DeepSeek handlers ───────────────────────────────
+  async function handleSaveDeepseek() {
+    setSavingDeepseek(true)
+    setDeepseekSaveMsg('')
+    setDeepseekTestResult(null)
+    try {
+      const payload: { deepseek_api_key?: string; default_model?: string } = {
+        default_model: deepseekModel,
+      }
+      if (deepseekKeyInput.trim()) payload.deepseek_api_key = deepseekKeyInput.trim()
+      const llm = await settingsApi.updateLlm(payload)
+      setDeepseekKeyConfigured(llm.deepseek_configured)
+      setDeepseekConnected(llm.status === 'connected')
+      setSystem(s => ({ ...s, default_llm: deepseekModel }))
+      if (deepseekKeyInput.trim()) setDeepseekKeyInput('')
+      setDeepseekSaveMsg('ok')
+    } catch (err: unknown) {
+      setDeepseekSaveMsg('err: ' + (err instanceof Error ? err.message : '保存失败'))
+    } finally {
+      setSavingDeepseek(false)
+      setTimeout(() => setDeepseekSaveMsg(''), 4000)
+    }
+  }
+
+  async function handleTestDeepseek() {
+    setTestingDeepseek(true)
+    setDeepseekTestResult(null)
+    try {
+      const r = await settingsApi.testLlm({
+        provider: 'deepseek',
+        api_key: deepseekKeyInput.trim() || undefined,
+      })
+      setDeepseekTestResult(r)
+      if (r.ok) setDeepseekConnected(true)
+    } catch {
+      setDeepseekTestResult({ ok: false, model: deepseekModel, latency_ms: null, error: '请求失败' })
+    } finally {
+      setTestingDeepseek(false)
+    }
+  }
+
+  async function handleSaveSystem() {
     setSaving(true)
     setSaveMsg('')
     try {
@@ -57,23 +176,12 @@ export function Settings() {
     }
   }
 
-  async function handleTestLlm() {
-    setTesting(true)
-    setTestResult(null)
-    try {
-      const r = await settingsApi.testLlm()
-      setTestResult(r)
-      if (r.ok) setLlmConnected(true)
-    } catch {
-      setTestResult({ ok: false, model: system.default_llm, latency_ms: null, error: '请求失败' })
-    } finally {
-      setTesting(false)
-    }
-  }
-
   if (loading) return (
     <div className="tmu txs" style={{ padding: '40px', textAlign: 'center' }}>加载中…</div>
   )
+
+  // Which provider is currently active
+  const activeProvider = system.default_llm.startsWith('deepseek') ? 'deepseek' : 'anthropic'
 
   return (
     <div>
@@ -82,80 +190,220 @@ export function Settings() {
 
         {/* LEFT: LLM 模型接入 */}
         <div>
-          <div className="sh"><div className="st">🤖 LLM 模型接入</div></div>
+          <div className="sh">
+            <div className="st">🤖 LLM 模型接入</div>
+            <span className="tag tag-g txs" style={{ fontSize: '10px' }}>
+              当前: {system.default_llm}
+            </span>
+          </div>
 
-          {/* Anthropic Claude */}
-          <div className="llm" style={{ borderColor: llmConnected ? 'rgba(0,212,170,.25)' : 'var(--border)' }}>
+          {/* ── Anthropic Claude ── */}
+          <div className="llm" style={{
+            borderColor: llmConnected ? 'rgba(0,212,170,.25)'
+              : apiKeyConfigured ? 'rgba(99,102,241,.3)' : 'var(--border)',
+            opacity: activeProvider === 'anthropic' ? 1 : 0.75,
+          }}>
             <div className="llm-logo" style={{ background: 'linear-gradient(135deg,#cc6600,#994d00)' }}>🟠</div>
             <div className="llm-info">
-              <div className="llm-name">Anthropic Claude</div>
-              <div className="llm-desc">
-                {anthropicConfigured
-                  ? 'API Key 已通过环境变量配置（ANTHROPIC_API_KEY）。'
-                  : 'API Key 未配置，请在服务器环境变量中设置 ANTHROPIC_API_KEY。'}
-              </div>
-              <div className="llm-row">
-                <input
-                  className="llm-key"
-                  type="password"
-                  value={anthropicConfigured ? '••••••••••••••••' : ''}
-                  placeholder="通过环境变量 ANTHROPIC_API_KEY 配置"
-                  disabled
-                  style={{ opacity: 0.6 }}
-                />
-                <button
-                  className="btn btn-ghost btn-xs"
-                  onClick={handleTestLlm}
-                  disabled={testing || !anthropicConfigured}
-                >
-                  {testing ? '测试中…' : '测试'}
-                </button>
-                <span className={`tag ${llmConnected ? 'tag-g' : anthropicConfigured ? 'tag-o' : 'tag-gray'} txs`}>
-                  {llmConnected ? '● 已连通' : anthropicConfigured ? '● 未验证' : '● 未配置'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <div className="llm-name">Anthropic Claude</div>
+                <span className={`tag ${llmConnected ? 'tag-g' : apiKeyConfigured ? 'tag-o' : 'tag-gray'} txs`}>
+                  {llmConnected ? '● 已连通' : apiKeyConfigured ? '● 已配置' : '● 未配置'}
                 </span>
+                {activeProvider === 'anthropic' && (
+                  <span className="tag tag-g txs" style={{ fontSize: '9px' }}>当前使用</span>
+                )}
               </div>
+
+              {/* Model selector */}
+              <div className="fg" style={{ marginBottom: '10px' }}>
+                <div className="fl" style={{ marginBottom: '5px', fontSize: '11.5px' }}>模型</div>
+                <select
+                  className="fi"
+                  style={{ fontSize: '12px', padding: '5px 8px' }}
+                  value={claudeModel}
+                  onChange={e => setClaudeModel(e.target.value)}
+                >
+                  {CLAUDE_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
+
+              {/* API Key input */}
+              <div className="fg" style={{ marginBottom: '10px' }}>
+                <div className="fl" style={{ marginBottom: '5px', fontSize: '11.5px' }}>
+                  API Key
+                  {apiKeyConfigured && (
+                    <span className="tmu" style={{ marginLeft: '6px', fontSize: '10px' }}>（已保存，输入新值可替换）</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <input
+                    className="fi"
+                    type={showKey ? 'text' : 'password'}
+                    placeholder={apiKeyConfigured ? '输入新 Key 可替换…' : 'sk-ant-api03-…'}
+                    value={apiKeyInput}
+                    onChange={e => { setApiKeyInput(e.target.value); setTestResult(null) }}
+                    style={{ flex: 1, fontSize: '12px' }}
+                    autoComplete="off"
+                  />
+                  <button
+                    className="btn btn-ghost btn-xs"
+                    onClick={() => setShowKey(v => !v)}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {showKey ? '🙈' : '👁️'}
+                  </button>
+                </div>
+                <div className="txs tmu" style={{ marginTop: '4px', fontSize: '10.5px' }}>
+                  可在 <span style={{ color: 'var(--acc1)' }}>console.anthropic.com</span> 获取
+                </div>
+              </div>
+
               {testResult && (
-                <div className={`alert ${testResult.ok ? 'a-ok' : 'a-err'} mt8`} style={{ fontSize: '11.5px' }}>
+                <div className={`alert ${testResult.ok ? 'a-ok' : 'a-err'}`} style={{ fontSize: '11.5px', marginBottom: '10px' }}>
                   {testResult.ok
-                    ? `✓ 连通正常 · ${testResult.model} · ${testResult.latency_ms}ms`
+                    ? `✓ 连接成功 · ${testResult.model} · 延迟 ${testResult.latency_ms}ms`
                     : `✗ 连接失败：${testResult.error}`}
                 </div>
               )}
-              <div className="fc g8 mt8">
-                <select
-                  className="fi"
-                  style={{ fontSize: '11px', padding: '3px 7px', width: 'auto' }}
-                  value={system.default_llm}
-                  onChange={e => patch('default_llm', e.target.value)}
+              {llmSaveMsg && (
+                <div className={`alert ${llmSaveMsg === 'ok' ? 'a-ok' : 'a-err'}`} style={{ fontSize: '11.5px', marginBottom: '10px' }}>
+                  {llmSaveMsg === 'ok' ? '✓ 配置已保存（Claude 设为默认模型）' : llmSaveMsg}
+                </div>
+              )}
+
+              <div className="fc g8">
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={handleTestLlm}
+                  disabled={testing || (!apiKeyInput.trim() && !apiKeyConfigured)}
+                  title={!apiKeyInput.trim() && !apiKeyConfigured ? '请先输入 API Key' : ''}
                 >
-                  {LLM_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <span className="txs tmu">默认模型</span>
+                  {testing ? '⟳ 测试中…' : '🔌 测试连接'}
+                </button>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSaveLlm}
+                  disabled={savingLlm}
+                >
+                  {savingLlm ? '保存中…' : '保存并设为默认'}
+                </button>
               </div>
             </div>
           </div>
 
-          {/* OpenAI — UI only */}
+          {/* ── DeepSeek ── */}
+          <div className="llm" style={{
+            borderColor: deepseekConnected ? 'rgba(0,212,170,.25)'
+              : deepseekKeyConfigured ? 'rgba(99,102,241,.3)' : 'var(--border)',
+            opacity: activeProvider === 'deepseek' ? 1 : 0.75,
+          }}>
+            <div className="llm-logo" style={{ background: 'linear-gradient(135deg,#1a7ad4,#0d4f8c)' }}>🔷</div>
+            <div className="llm-info">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <div className="llm-name">DeepSeek</div>
+                <span className={`tag ${deepseekConnected ? 'tag-g' : deepseekKeyConfigured ? 'tag-o' : 'tag-gray'} txs`}>
+                  {deepseekConnected ? '● 已连通' : deepseekKeyConfigured ? '● 已配置' : '● 未配置'}
+                </span>
+                {activeProvider === 'deepseek' && (
+                  <span className="tag tag-g txs" style={{ fontSize: '9px' }}>当前使用</span>
+                )}
+              </div>
+
+              {/* Model selector */}
+              <div className="fg" style={{ marginBottom: '10px' }}>
+                <div className="fl" style={{ marginBottom: '5px', fontSize: '11.5px' }}>模型</div>
+                <select
+                  className="fi"
+                  style={{ fontSize: '12px', padding: '5px 8px' }}
+                  value={deepseekModel}
+                  onChange={e => setDeepseekModel(e.target.value)}
+                >
+                  {DEEPSEEK_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
+
+              {/* API Key input */}
+              <div className="fg" style={{ marginBottom: '10px' }}>
+                <div className="fl" style={{ marginBottom: '5px', fontSize: '11.5px' }}>
+                  API Key
+                  {deepseekKeyConfigured && (
+                    <span className="tmu" style={{ marginLeft: '6px', fontSize: '10px' }}>（已保存，输入新值可替换）</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <input
+                    className="fi"
+                    type={showDeepseekKey ? 'text' : 'password'}
+                    placeholder={deepseekKeyConfigured ? '输入新 Key 可替换…' : 'sk-…'}
+                    value={deepseekKeyInput}
+                    onChange={e => { setDeepseekKeyInput(e.target.value); setDeepseekTestResult(null) }}
+                    style={{ flex: 1, fontSize: '12px' }}
+                    autoComplete="off"
+                  />
+                  <button
+                    className="btn btn-ghost btn-xs"
+                    onClick={() => setShowDeepseekKey(v => !v)}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {showDeepseekKey ? '🙈' : '👁️'}
+                  </button>
+                </div>
+                <div className="txs tmu" style={{ marginTop: '4px', fontSize: '10.5px' }}>
+                  可在 <span style={{ color: 'var(--acc1)' }}>platform.deepseek.com</span> 获取
+                </div>
+              </div>
+
+              {deepseekTestResult && (
+                <div className={`alert ${deepseekTestResult.ok ? 'a-ok' : 'a-err'}`} style={{ fontSize: '11.5px', marginBottom: '10px' }}>
+                  {deepseekTestResult.ok
+                    ? `✓ 连接成功 · ${deepseekTestResult.model} · 延迟 ${deepseekTestResult.latency_ms}ms`
+                    : `✗ 连接失败：${deepseekTestResult.error}`}
+                </div>
+              )}
+              {deepseekSaveMsg && (
+                <div className={`alert ${deepseekSaveMsg === 'ok' ? 'a-ok' : 'a-err'}`} style={{ fontSize: '11.5px', marginBottom: '10px' }}>
+                  {deepseekSaveMsg === 'ok' ? '✓ 配置已保存（DeepSeek 设为默认模型）' : deepseekSaveMsg}
+                </div>
+              )}
+
+              <div className="fc g8">
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={handleTestDeepseek}
+                  disabled={testingDeepseek || (!deepseekKeyInput.trim() && !deepseekKeyConfigured)}
+                  title={!deepseekKeyInput.trim() && !deepseekKeyConfigured ? '请先输入 API Key' : ''}
+                >
+                  {testingDeepseek ? '⟳ 测试中…' : '🔌 测试连接'}
+                </button>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSaveDeepseek}
+                  disabled={savingDeepseek}
+                >
+                  {savingDeepseek ? '保存中…' : '保存并设为默认'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* OpenAI — planned */}
           <div className="llm" style={{ opacity: 0.5 }}>
             <div className="llm-logo" style={{ background: 'linear-gradient(135deg,#10a37f,#0d7a5e)' }}>🟢</div>
             <div className="llm-info">
               <div className="llm-name">OpenAI GPT-4o</div>
               <div className="llm-desc">暂未启用（规划中）</div>
-              <div className="fc g8 mt8">
-                <span className="tag tag-gray txs">● 未启用</span>
-              </div>
+              <div className="fc g8 mt8"><span className="tag tag-gray txs">● 未启用</span></div>
             </div>
           </div>
 
-          {/* Private LLM — UI only */}
+          {/* Private LLM — planned */}
           <div className="llm" style={{ opacity: 0.5 }}>
             <div className="llm-logo" style={{ background: 'linear-gradient(135deg,#1a56db,#0e3a8c)' }}>🔵</div>
             <div className="llm-info">
               <div className="llm-name">私有化 Qwen2.5-72B</div>
               <div className="llm-desc">暂未启用（规划中）</div>
-              <div className="fc g8 mt8">
-                <span className="tag tag-gray txs">● 未启用</span>
-              </div>
+              <div className="fc g8 mt8"><span className="tag tag-gray txs">● 未启用</span></div>
             </div>
           </div>
         </div>
@@ -228,8 +476,8 @@ export function Settings() {
           <div className="fc g8" style={{ justifyContent: 'flex-end' }}>
             {saveMsg === 'ok' && <span className="tag tag-g txs">✓ 已保存</span>}
             {saveMsg === 'err' && <span className="tag tag-r txs">✗ 保存失败</span>}
-            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-              {saving ? '保存中…' : '保存配置'}
+            <button className="btn btn-primary btn-sm" onClick={handleSaveSystem} disabled={saving}>
+              {saving ? '保存中…' : '保存系统配置'}
             </button>
           </div>
 

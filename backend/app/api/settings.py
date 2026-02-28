@@ -1,8 +1,9 @@
 """
 系统设置 API
-- GET  /settings         读取当前配置（LLM 状态 + 系统参数）
-- PATCH /settings/system 保存非敏感系统参数（需管理员）
-- POST  /settings/test-llm 测试 Anthropic 连接
+- GET  /settings              读取当前配置（LLM 状态 + 系统参数）
+- PATCH /settings/system      保存非敏感系统参数（需管理员）
+- PATCH /settings/llm         保存 LLM API Key 和默认模型（需管理员）
+- POST  /settings/test-llm    测试 LLM 连接（支持 Anthropic / DeepSeek）
 """
 import time
 import uuid
@@ -18,7 +19,8 @@ from app.models.user import User
 from app.models.system_setting import SystemSetting
 from app.schemas.settings import (
     SettingsOut, LLMStatus, SystemConfig,
-    SystemConfigUpdate, LLMTestResult,
+    SystemConfigUpdate, LLMConfigUpdate,
+    LLMTestRequest, LLMTestResult,
 )
 
 router = APIRouter(prefix="/settings", tags=["系统设置"])
@@ -66,19 +68,47 @@ def _read_system(db: Session) -> SystemConfig:
     )
 
 
+def get_effective_api_key(db: Session) -> str:
+    """Anthropic API Key：优先读 DB，回退到环境变量。"""
+    db_key = _get(db, "anthropic_api_key")
+    if db_key:
+        return db_key
+    return settings.ANTHROPIC_API_KEY or ""
+
+
+def get_effective_deepseek_key(db: Session) -> str:
+    """DeepSeek API Key：仅从 DB 读取（无默认环境变量）。"""
+    return _get(db, "deepseek_api_key") or ""
+
+
+def _build_llm_status(db: Session) -> LLMStatus:
+    anthropic_key = get_effective_api_key(db)
+    deepseek_key = get_effective_deepseek_key(db)
+    current_model = _get(db, "default_llm")
+    is_deepseek = current_model.startswith("deepseek")
+
+    anthropic_configured = bool(anthropic_key)
+    deepseek_configured = bool(deepseek_key)
+
+    if is_deepseek:
+        status = "connected" if deepseek_configured else "not_configured"
+    else:
+        status = "connected" if anthropic_configured else "not_configured"
+
+    return LLMStatus(
+        anthropic_configured=anthropic_configured,
+        deepseek_configured=deepseek_configured,
+        current_model=current_model,
+        status=status,
+    )
+
+
 @router.get("", response_model=SettingsOut, summary="读取系统配置")
 def get_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    configured = bool(settings.ANTHROPIC_API_KEY)
-    current_model = _get(db, "default_llm")
-    llm = LLMStatus(
-        anthropic_configured=configured,
-        current_model=current_model,
-        status="connected" if configured else "not_configured",
-    )
-    return SettingsOut(llm=llm, system=_read_system(db))
+    return SettingsOut(llm=_build_llm_status(db), system=_read_system(db))
 
 
 @router.patch("/system", response_model=SystemConfig, summary="保存系统参数（管理员）")
@@ -95,28 +125,70 @@ def update_system(
     return _read_system(db)
 
 
-@router.post("/test-llm", response_model=LLMTestResult, summary="测试 Anthropic 连接")
+@router.patch("/llm", response_model=LLMStatus, summary="保存 LLM 配置（管理员）")
+def update_llm(
+    body: LLMConfigUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if body.anthropic_api_key is not None:
+        _set(db, "anthropic_api_key", body.anthropic_api_key, current_user.id)
+    if body.deepseek_api_key is not None:
+        _set(db, "deepseek_api_key", body.deepseek_api_key, current_user.id)
+    if body.default_model is not None:
+        _set(db, "default_llm", body.default_model, current_user.id)
+    db.commit()
+    return _build_llm_status(db)
+
+
+@router.post("/test-llm", response_model=LLMTestResult, summary="测试 LLM 连接")
 def test_llm(
+    body: LLMTestRequest = LLMTestRequest(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not settings.ANTHROPIC_API_KEY:
-        return LLMTestResult(ok=False, model=settings.DEFAULT_LLM, error="ANTHROPIC_API_KEY 未配置")
+    if body.provider == "deepseek":
+        return _test_deepseek(body.api_key or get_effective_deepseek_key(db), db)
+    else:
+        return _test_anthropic(body.api_key or get_effective_api_key(db), db)
 
-    current_model = _get(db, "default_llm")
+
+def _test_anthropic(api_key: str, db: Session) -> LLMTestResult:
+    if not api_key:
+        return LLMTestResult(ok=False, model="", error="Anthropic API Key 未配置")
+    model = _get(db, "default_llm")
+    # If current model is deepseek, test with a default claude model
+    if model.startswith("deepseek"):
+        model = "claude-sonnet-4-6"
     t0 = time.time()
     try:
         import anthropic
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        client = anthropic.Anthropic(api_key=api_key)
         client.messages.create(
-            model=current_model,
+            model=model,
             max_tokens=5,
             messages=[{"role": "user", "content": "ping"}],
         )
-        return LLMTestResult(
-            ok=True,
-            model=current_model,
-            latency_ms=int((time.time() - t0) * 1000),
-        )
+        return LLMTestResult(ok=True, model=model, latency_ms=int((time.time() - t0) * 1000))
     except Exception as exc:
-        return LLMTestResult(ok=False, model=current_model, error=str(exc)[:200])
+        return LLMTestResult(ok=False, model=model, error=str(exc)[:200])
+
+
+def _test_deepseek(api_key: str, db: Session) -> LLMTestResult:
+    if not api_key:
+        return LLMTestResult(ok=False, model="", error="DeepSeek API Key 未配置")
+    model = _get(db, "default_llm")
+    if not model.startswith("deepseek"):
+        model = "deepseek-chat"
+    t0 = time.time()
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+        client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=5,
+        )
+        return LLMTestResult(ok=True, model=model, latency_ms=int((time.time() - t0) * 1000))
+    except Exception as exc:
+        return LLMTestResult(ok=False, model=model, error=str(exc)[:200])

@@ -8,7 +8,7 @@ import type {
   DeliverableOut,
   DashboardStats, HierarchyCustomer,
   TeamMember,
-  SettingsOut, SystemConfig, LLMTestResult,
+  SettingsOut, SystemConfig, LLMStatus, LLMTestResult,
 } from './types'
 
 // ── Auth ──────────────────────────────────────────────
@@ -93,7 +93,11 @@ export const solutionsApi = {
   }) => api.post<SolutionOut>('/solutions', data),
   get: (id: string) => api.get<SolutionOut>(`/solutions/${id}`),
   progress: (id: string) => api.get<SolutionProgress>(`/solutions/${id}/progress`),
+  updateStatus: (id: string, status: string) =>
+    api.patch<SolutionOut>(`/solutions/${id}/status?status=${status}`, {}),
 }
+
+// ── Settings ──────────────────────────────────────────────
 
 // ── Deliverables ─────────────────────────────────────
 export const deliverablesApi = {
@@ -116,7 +120,10 @@ export const teamApi = {
 export const settingsApi = {
   get: () => api.get<SettingsOut>('/settings'),
   updateSystem: (data: Partial<SystemConfig>) => api.patch<SystemConfig>('/settings/system', data),
-  testLlm: () => api.post<LLMTestResult>('/settings/test-llm', {}),
+  updateLlm: (data: { anthropic_api_key?: string; deepseek_api_key?: string; default_model?: string }) =>
+    api.patch<LLMStatus>('/settings/llm', data),
+  testLlm: (payload: { provider?: string; api_key?: string }) =>
+    api.post<LLMTestResult>('/settings/test-llm', payload),
 }
 
 export * from './types'

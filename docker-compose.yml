@@ -87,7 +87,7 @@ services:
       - "8080:8080"
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-presale}:${POSTGRES_PASSWORD:-presale123}@postgres:5432/${POSTGRES_DB:-presale_db}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://presale-redis:6379/0
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
@@ -117,7 +117,7 @@ services:
     command: celery -A app.services.celery_app worker --loglevel=info --concurrency=4
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-presale}:${POSTGRES_PASSWORD:-presale123}@postgres:5432/${POSTGRES_DB:-presale_db}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://presale-redis:6379/0
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}

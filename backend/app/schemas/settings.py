@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class LLMStatus(BaseModel):
     anthropic_configured: bool
+    deepseek_configured: bool = False
     current_model: str
     status: str          # "connected" | "not_configured" | "error"
     error: str | None = None
@@ -31,6 +32,17 @@ class SystemConfigUpdate(BaseModel):
     audit_log_enabled: bool | None = None
     auto_knowledge_base: bool | None = None
     max_concurrent_generations: int | None = None
+
+
+class LLMConfigUpdate(BaseModel):
+    anthropic_api_key: str | None = None
+    deepseek_api_key: str | None = None
+    default_model: str | None = None
+
+
+class LLMTestRequest(BaseModel):
+    api_key: str | None = None
+    provider: str = "anthropic"   # "anthropic" | "deepseek"
 
 
 class LLMTestResult(BaseModel):

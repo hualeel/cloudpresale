@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useStore } from '../store/useStore'
 import { requirementsApi, solutionsApi } from '../api'
 import type { RequirementOut, SolutionProgress, AgentType } from '../api/types'
@@ -15,15 +15,24 @@ const DLV_OPTIONS = [
   { key: 'ppt_devops',    icon: '📑', name: 'DevOps专项PPT',   desc: '面向开发/DevOps团队，含迁移与实施计划' },
   { key: 'ppt_security',  icon: '🔐', name: '安全合规专项PPT', desc: '面向安全团队/CISO，含等保合规详述' },
 ]
+const STATUS_TAG: Record<string, string> = {
+  draft: 'tag-o', confirmed: 'tag-g', archived: 'tag-gray',
+}
+const STATUS_LABEL: Record<string, string> = {
+  draft: '草稿', confirmed: '已确认', archived: '已归档',
+}
 
 export function Generate() {
   const { setPage, selectedReqId } = useStore()
 
-  const [req, setReq] = useState<RequirementOut | null>(null)
   const [reqs, setReqs] = useState<RequirementOut[]>([])
   const [currentReqId, setCurrentReqId] = useState<string | null>(selectedReqId)
+  const [req, setReq] = useState<RequirementOut | null>(null)
   const [changeNote, setChangeNote] = useState('')
   const [dlvSelected, setDlvSelected] = useState([true, true, true, false, false, false])
+
+  const [filterCustomer, setFilterCustomer] = useState('')
+  const [filterOpp, setFilterOpp] = useState('')
 
   const [solId, setSolId] = useState<string | null>(null)
   const [progress, setProgress] = useState<SolutionProgress | null>(null)
@@ -31,20 +40,64 @@ export function Generate() {
   const [error, setError] = useState('')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // 加载需求列表
+  // Load ALL requirements
   useEffect(() => {
-    requirementsApi.list({ status: 'confirmed' }).then(data => {
+    requirementsApi.list().then(data => {
       setReqs(data.items)
-      const id = currentReqId ?? data.items[0]?.id ?? null
-      if (id) {
-        setCurrentReqId(id)
-        const found = data.items.find(r => r.id === id) ?? data.items[0] ?? null
-        setReq(found)
+      if (selectedReqId) {
+        const found = data.items.find(r => r.id === selectedReqId)
+        if (found) {
+          setCurrentReqId(selectedReqId)
+          setReq(found)
+          setFilterCustomer(found.customer_name ?? '')
+          setFilterOpp(found.opportunity_id ?? '')
+          return
+        }
+      }
+      // Default: auto-select first item
+      const first = data.items[0] ?? null
+      if (first) {
+        setCurrentReqId(first.id)
+        setReq(first)
       }
     }).catch(console.error)
   }, [])
 
-  // 轮询进度
+  // Unique customers
+  const customers = useMemo(() => {
+    const set = new Set(reqs.map(r => r.customer_name).filter(Boolean))
+    return Array.from(set).sort()
+  }, [reqs])
+
+  // Opportunities filtered by selected customer
+  const opportunities = useMemo(() => {
+    const map = new Map<string, string>()
+    reqs
+      .filter(r => !filterCustomer || r.customer_name === filterCustomer)
+      .forEach(r => { if (r.opportunity_id) map.set(r.opportunity_id, r.opportunity_name ?? r.opportunity_id) })
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]))
+  }, [reqs, filterCustomer])
+
+  // Reset opp filter when customer changes
+  useEffect(() => { setFilterOpp('') }, [filterCustomer])
+
+  // Requirements filtered by customer + opp
+  const filteredReqs = useMemo(() => {
+    return reqs.filter(r => {
+      if (filterCustomer && r.customer_name !== filterCustomer) return false
+      if (filterOpp && r.opportunity_id !== filterOpp) return false
+      return true
+    })
+  }, [reqs, filterCustomer, filterOpp])
+
+  // When filter changes, keep selection if still valid; otherwise pick first
+  useEffect(() => {
+    if (filteredReqs.length === 0) { setCurrentReqId(null); setReq(null); return }
+    const still = filteredReqs.find(r => r.id === currentReqId)
+    if (!still) { setCurrentReqId(filteredReqs[0].id); setReq(filteredReqs[0]) }
+  }, [filteredReqs])
+
+  // Poll progress
   useEffect(() => {
     if (!solId) return
     pollRef.current = setInterval(async () => {
@@ -106,21 +159,60 @@ export function Generate() {
 
         {/* Requirement Select */}
         <div className="panel mt4" style={{ marginBottom: '14px' }}>
-          <div className="ph"><span>📋</span><span className="pt">选择需求</span></div>
+          <div className="ph"><span>📋</span><span className="pt">选择需求</span>
+            <span className="txs tmu ml-auto">{filteredReqs.length} 条</span>
+          </div>
           <div className="pb-">
-            <div className="fg">
-              <div className="fl" style={{ marginBottom: '6px' }}>已确认需求</div>
-              <select className="fi" value={currentReqId ?? ''} onChange={e => {
-                setCurrentReqId(e.target.value)
-                setReq(reqs.find(r => r.id === e.target.value) ?? null)
-              }}>
-                {reqs.length === 0 && <option value="">暂无已确认需求</option>}
-                {reqs.map(r => (
-                  <option key={r.id} value={r.id}>{r.customer_name} · {r.title} (完整度 {(r.completeness * 100).toFixed(0)}%)</option>
-                ))}
+
+            {/* Cascading filters */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+              <select className="fs" style={{ flex: 1, minWidth: '120px', padding: '5px 8px', fontSize: '12px' }}
+                value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)}>
+                <option value="">全部客户</option>
+                {customers.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select className="fs" style={{ flex: 1, minWidth: '140px', padding: '5px 8px', fontSize: '12px' }}
+                value={filterOpp} onChange={e => setFilterOpp(e.target.value)}>
+                <option value="">全部商机</option>
+                {opportunities.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
               </select>
             </div>
-            <div className="fg" style={{ marginTop: '10px' }}>
+
+            {/* Requirement cards */}
+            {filteredReqs.length === 0 ? (
+              <div className="tmu txs" style={{ padding: '16px', textAlign: 'center' }}>暂无需求，请调整筛选条件</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '260px', overflowY: 'auto' }}>
+                {filteredReqs.map(r => (
+                  <div key={r.id}
+                    onClick={() => { setCurrentReqId(r.id); setReq(r) }}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: `1.5px solid ${currentReqId === r.id ? 'var(--acc1)' : 'var(--border1)'}`,
+                      background: currentReqId === r.id ? 'rgba(99,102,241,0.06)' : 'transparent',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <span className="fw6" style={{ fontSize: '12.5px' }}>{r.title}</span>
+                        <span className="txs tmu">v{r.version}</span>
+                      </div>
+                      <div className="txs tmu" style={{ marginTop: '2px' }}>
+                        🏦 {r.customer_name} · 💼 {r.opportunity_name}
+                      </div>
+                    </div>
+                    <span className={`tag ${STATUS_TAG[r.status]}`} style={{ fontSize: '10px', flexShrink: 0 }}>{STATUS_LABEL[r.status]}</span>
+                    <span className="txs tg fw6" style={{ flexShrink: 0, minWidth: '30px', textAlign: 'right' }}>{(r.completeness * 100).toFixed(0)}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="fg" style={{ marginTop: '12px' }}>
               <div className="fl" style={{ marginBottom: '6px' }}>版本备注（可选）</div>
               <input className="fi" value={changeNote} onChange={e => setChangeNote(e.target.value)} placeholder="例如：补充信创适配方案" />
             </div>
@@ -158,7 +250,6 @@ export function Generate() {
                     </div>
                   )
                 })}
-                {/* Placeholder while waiting for first poll */}
                 {(progress?.agents ?? []).length === 0 && Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="ag">
                     <div className="ag-h"><div className="ag-dot"></div><div><div className="ag-name">{Object.values(AGENT_LABEL)[i]}</div><div className="ag-status">等待中</div></div></div>
@@ -213,7 +304,17 @@ export function Generate() {
         <div className="sh"><div className="st">需求信息预览</div></div>
         {req ? (
           <div className="panel">
-            <div className="ph"><span>📋</span><span className="pt">{req.title}</span><span className="tag tag-g ml-auto">完整度 {(req.completeness * 100).toFixed(0)}%</span></div>
+            <div className="ph">
+              <span>📋</span>
+              <span className="pt" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px' }}>
+                <span className="tag dim-c" style={{ fontSize: '11px' }}>🏦 {req.customer_name}</span>
+                <span className="tmu">›</span>
+                <span className="tag dim-o" style={{ fontSize: '11px' }}>💼 {req.opportunity_name}</span>
+                <span className="tmu">›</span>
+                <span>{req.title}</span>
+              </span>
+              <span className="tag tag-g ml-auto" style={{ flexShrink: 0 }}>完整度 {(req.completeness * 100).toFixed(0)}%</span>
+            </div>
             <div className="pb-" style={{ fontSize: '12px', lineHeight: 1.7, color: 'var(--text2)' }}>
               {Object.entries(req.content).map(([k, v]) => (
                 v ? (
@@ -236,7 +337,7 @@ export function Generate() {
           <div className="panel">
             <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text3)' }}>
               <div style={{ fontSize: '32px', marginBottom: '10px' }}>🤖</div>
-              <div className="txs">选择已确认需求<br />开始 AI 方案生成</div>
+              <div className="txs">选择需求<br />开始 AI 方案生成</div>
             </div>
           </div>
         )}

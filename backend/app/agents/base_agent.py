@@ -1,11 +1,9 @@
 """
-单个 AI Agent 执行器：调用 Claude API，流式输出，更新 GenJob 进度。
+单个 AI Agent 执行器：支持 Anthropic Claude 和 DeepSeek，流式输出，更新 GenJob 进度。
 """
 import json
 import logging
 from datetime import datetime, timezone
-
-import anthropic
 
 from app.config import settings
 from app.agents.prompts import AGENT_CONFIGS
@@ -34,11 +32,120 @@ def _format_requirement(content: dict) -> str:
         if val is None:
             continue
         if isinstance(val, list):
-            val_str = "、".join(str(v) if not isinstance(v, dict) else json.dumps(v, ensure_ascii=False) for v in val)
+            val_str = "、".join(
+                str(v) if not isinstance(v, dict) else json.dumps(v, ensure_ascii=False)
+                for v in val
+            )
         else:
             val_str = str(val)
         lines.append(f"- **{label}**: {val_str}")
     return "\n".join(lines) if lines else "（暂无结构化需求内容）"
+
+
+def _read_llm_config() -> dict:
+    """从 DB 读取有效 LLM 配置，返回 {model, anthropic_key, deepseek_key}。DB 优先，env 兜底。"""
+    model = settings.DEFAULT_LLM
+    anthropic_key = settings.ANTHROPIC_API_KEY or ""
+    deepseek_key = ""
+    try:
+        from sqlalchemy import create_engine as _ce
+        from sqlalchemy.orm import Session as _S
+        from app.models.system_setting import SystemSetting as _SS
+        _engine = _ce(settings.DATABASE_URL)
+        with _S(_engine) as _db:
+            rows = _db.query(_SS).filter(
+                _SS.key.in_(["default_llm", "anthropic_api_key", "deepseek_api_key"])
+            ).all()
+            kv = {r.key: r.value for r in rows if r.value}
+            if "default_llm" in kv:
+                model = kv["default_llm"]
+            if "anthropic_api_key" in kv:
+                anthropic_key = kv["anthropic_api_key"]
+            if "deepseek_api_key" in kv:
+                deepseek_key = kv["deepseek_api_key"]
+        _engine.dispose()
+    except Exception as e:
+        logger.warning(f"_read_llm_config: failed to read from DB: {e}")
+    return {"model": model, "anthropic_key": anthropic_key, "deepseek_key": deepseek_key}
+
+
+def _run_with_anthropic(
+    config: dict, user_message: str, model: str, api_key: str, on_progress
+) -> dict:
+    import anthropic
+    client = anthropic.Anthropic(
+        api_key=api_key,
+        **( {"base_url": settings.LLM_BASE_URL} if settings.LLM_BASE_URL else {} ),
+    )
+    start_time = datetime.now(timezone.utc)
+    collected_text = []
+    input_tokens = 0
+    output_tokens = 0
+
+    with client.messages.stream(
+        model=model,
+        max_tokens=4096,
+        system=config["system"],
+        messages=[{"role": "user", "content": user_message}],
+    ) as stream:
+        char_count = 0
+        for text in stream.text_stream:
+            collected_text.append(text)
+            char_count += len(text)
+            estimated_progress = min(0.95, char_count / 2000)
+            if on_progress:
+                on_progress(estimated_progress, text)
+        final_message = stream.get_final_message()
+        input_tokens = final_message.usage.input_tokens
+        output_tokens = final_message.usage.output_tokens
+
+    duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+    return {
+        "content": "".join(collected_text),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "duration_s": round(duration, 1),
+    }
+
+
+def _run_with_deepseek(
+    config: dict, user_message: str, model: str, api_key: str, on_progress
+) -> dict:
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    start_time = datetime.now(timezone.utc)
+    collected_text = []
+    output_tokens = 0
+
+    stream = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": config["system"]},
+            {"role": "user", "content": user_message},
+        ],
+        stream=True,
+        stream_options={"include_usage": True},
+        max_tokens=4096,
+    )
+    char_count = 0
+    for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta.content:
+            text = chunk.choices[0].delta.content
+            collected_text.append(text)
+            char_count += len(text)
+            estimated_progress = min(0.95, char_count / 2000)
+            if on_progress:
+                on_progress(estimated_progress, text)
+        if hasattr(chunk, "usage") and chunk.usage:
+            output_tokens = chunk.usage.completion_tokens or 0
+
+    duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+    return {
+        "content": "".join(collected_text),
+        "input_tokens": 0,
+        "output_tokens": output_tokens,
+        "duration_s": round(duration, 1),
+    }
 
 
 def run_single_agent(
@@ -57,7 +164,7 @@ def run_single_agent(
         on_progress: 进度回调 fn(progress: float, chunk: str)
 
     Returns:
-        {"content": "<markdown>", "tokens": int, "duration_s": float}
+        {"content": "<markdown>", "input_tokens": int, "output_tokens": int, "duration_s": float}
     """
     config = AGENT_CONFIGS[agent_type]
     req_text = _format_requirement(requirement_content)
@@ -75,48 +182,22 @@ def run_single_agent(
     if rag_context:
         user_message = rag_context + "\n\n---\n\n" + user_message
 
-    client = anthropic.Anthropic(
-        api_key=settings.ANTHROPIC_API_KEY,
-        **( {"base_url": settings.LLM_BASE_URL} if settings.LLM_BASE_URL else {} ),
-    )
+    llm_cfg = _read_llm_config()
+    model = llm_cfg["model"]
+    logger.info(f"[{agent_type}] Starting generation with model {model}")
 
-    start_time = datetime.now(timezone.utc)
-    collected_text = []
-    input_tokens = 0
-    output_tokens = 0
-
-    logger.info(f"[{agent_type}] Starting generation with model {settings.DEFAULT_LLM}")
-
-    with client.messages.stream(
-        model=settings.DEFAULT_LLM,
-        max_tokens=4096,
-        system=config["system"],
-        messages=[{"role": "user", "content": user_message}],
-    ) as stream:
-        char_count = 0
-        for text in stream.text_stream:
-            collected_text.append(text)
-            char_count += len(text)
-            # 估算进度（假设平均输出 2000 字符）
-            estimated_progress = min(0.95, char_count / 2000)
-            if on_progress:
-                on_progress(estimated_progress, text)
-
-        # 获取最终 usage
-        final_message = stream.get_final_message()
-        input_tokens = final_message.usage.input_tokens
-        output_tokens = final_message.usage.output_tokens
-
-    duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-    result_content = "".join(collected_text)
+    if model.startswith("deepseek"):
+        deepseek_key = llm_cfg["deepseek_key"]
+        if not deepseek_key:
+            raise ValueError("DeepSeek API Key 未配置，请在平台配置中心设置")
+        result = _run_with_deepseek(config, user_message, model, deepseek_key, on_progress)
+    else:
+        anthropic_key = llm_cfg["anthropic_key"]
+        if not anthropic_key:
+            raise ValueError("Anthropic API Key 未配置，请在平台配置中心设置")
+        result = _run_with_anthropic(config, user_message, model, anthropic_key, on_progress)
 
     logger.info(
-        f"[{agent_type}] Done: {output_tokens} output tokens, {duration:.1f}s"
+        f"[{agent_type}] Done: {result['output_tokens']} output tokens, {result['duration_s']}s"
     )
-
-    return {
-        "content": result_content,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "duration_s": round(duration, 1),
-    }
+    return result
