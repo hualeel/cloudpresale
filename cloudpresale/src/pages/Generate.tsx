@@ -65,7 +65,7 @@ export function Generate() {
 
   // Unique customers
   const customers = useMemo(() => {
-    const set = new Set(reqs.map(r => r.customer_name).filter(Boolean))
+    const set = new Set(reqs.map(r => r.customer_name).filter((n): n is string => n !== null))
     return Array.from(set).sort()
   }, [reqs])
 

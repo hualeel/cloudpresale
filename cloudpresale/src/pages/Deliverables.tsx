@@ -105,7 +105,7 @@ export function Deliverables() {
 
   // Filter options derived from ALL requirements (not just solution groups)
   const customers = useMemo(() => {
-    const set = new Set(allReqs.map(r => r.customer_name).filter(Boolean))
+    const set = new Set(allReqs.map(r => r.customer_name).filter((n): n is string => n !== null))
     return Array.from(set).sort()
   }, [allReqs])
 
