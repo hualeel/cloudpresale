@@ -18,10 +18,10 @@ const navItems: { section: string; items: NavItem[] }[] = [
     { id: 'generate', icon: '🤖', label: '方案生成' },
     { id: 'deliverables', icon: '📦', label: '交付物管理', badge: '12', badgeCls: 'g' },
   ]},
-  { section: 'DevOps', items: [
-    { id: 'cicd', icon: '🚀', label: 'CI/CD 流水线' },
-    { id: 'k8s', icon: '☸️', label: 'K8s 集群状态' },
-  ]},
+  // { section: 'DevOps', items: [
+  //   { id: 'cicd', icon: '🚀', label: 'CI/CD 流水线' },
+  //   { id: 'k8s', icon: '☸️', label: 'K8s 集群状态' },
+  // ]},
   { section: '系统', items: [
     { id: 'settings', icon: '⚙️', label: '平台配置' },
     { id: 'team', icon: '👥', label: '团队成员' },
