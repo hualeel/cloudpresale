@@ -1,6 +1,6 @@
-# SolveIQ — 项目总结报告
+# SolveIQ 方案智能协同平台 — 项目总结报告
 
-> 版本：v2.0 | 日期：2026-03-01 | Intelligent Presales Collaboration Platform
+> 版本：v2.0 | 日期：2026-03-01 | SolveIQ 方案智能协同平台
 
 **在线体验**：[http://106.54.237.35](http://106.54.237.35) — 请联系管理员获取演示账号
 
@@ -477,4 +477,4 @@ postgres (healthy) ─┴─▶ worker
 
 ---
 
-*SolveIQ — From Requirements to Solutions, Powered by AI*
+*SolveIQ 方案智能协同平台 — From Requirements to Solutions, Powered by AI*

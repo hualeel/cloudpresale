@@ -34,7 +34,7 @@ export function Login() {
         <div style={{fontSize: '28px', fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text)', letterSpacing: '-0.5px'}}>
           Solve<span style={{color: 'var(--acc1)'}}>IQ</span>
         </div>
-        <div style={{color: 'var(--text3)', fontSize: '13px', marginTop: '6px'}}>Intelligent Presales Collaboration Platform</div>
+        <div style={{color: 'var(--text3)', fontSize: '13px', marginTop: '6px'}}>方案智能协同平台</div>
       </div>
 
       {/* Card */}
