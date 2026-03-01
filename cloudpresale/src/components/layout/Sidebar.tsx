@@ -1,5 +1,9 @@
 import { useStore } from '../../store/useStore'
 
+const ROLE_LABEL: Record<string, string> = {
+  admin: '管理员', senior_sa: '高级SA', sa: 'SA', junior_sa: '初级SA',
+}
+
 interface NavItem { id: string; icon: string; label: string; badge?: string; badgeCls?: string }
 const navItems: { section: string; items: NavItem[] }[] = [
   { section: '工作台', items: [
@@ -25,7 +29,7 @@ const navItems: { section: string; items: NavItem[] }[] = [
 ]
 
 export function Sidebar() {
-  const { currentPage, setPage } = useStore()
+  const { currentPage, setPage, user } = useStore()
 
   return (
     <aside className="sidebar">
@@ -33,8 +37,8 @@ export function Sidebar() {
         <div className="logo-wrap">
           <div className="logo-icon">⚡</div>
           <div>
-            <div className="logo-name">CloudPresale</div>
-            <div className="logo-ver">AI PLATFORM · v3.0</div>
+            <div className="logo-name">Solve<span style={{color:'var(--acc1)'}}>IQ</span></div>
+            <div className="logo-ver">PRESALES AI · v3.0</div>
           </div>
         </div>
       </div>
@@ -56,13 +60,17 @@ export function Sidebar() {
         </div>
       ))}
 
-      <div className="user-bar">
-        <div className="avatar">张</div>
-        <div>
-          <div className="user-name">张志远</div>
-          <div className="user-role">高级解决方案架构师</div>
+      {user && (
+        <div className="user-bar">
+          <div className="avatar" style={{background:'linear-gradient(135deg,var(--acc1),var(--acc2))'}}>
+            {user.name[0]}
+          </div>
+          <div>
+            <div className="user-name">{user.name}</div>
+            <div className="user-role">{ROLE_LABEL[user.role] ?? user.role}</div>
+          </div>
         </div>
-      </div>
+      )}
     </aside>
   )
 }

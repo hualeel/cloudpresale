@@ -23,9 +23,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="CloudPresale AI — 后端 API",
+    title="SolveIQ — Backend API",
     version="1.0.0",
-    description="云原生售前智能方案生成平台后端接口",
+    description="Intelligent Presales Collaboration Platform — Backend API",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,

@@ -32,9 +32,9 @@ export function Login() {
       {/* Logo */}
       <div style={{textAlign: 'center'}}>
         <div style={{fontSize: '28px', fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text)', letterSpacing: '-0.5px'}}>
-          CloudPresale <span style={{color: 'var(--acc1)'}}>AI</span>
+          Solve<span style={{color: 'var(--acc1)'}}>IQ</span>
         </div>
-        <div style={{color: 'var(--text3)', fontSize: '13px', marginTop: '6px'}}>云原生售前架构师智能方案生成系统</div>
+        <div style={{color: 'var(--text3)', fontSize: '13px', marginTop: '6px'}}>Intelligent Presales Collaboration Platform</div>
       </div>
 
       {/* Card */}
@@ -86,8 +86,8 @@ export function Login() {
           <div style={{display: 'flex', flexDirection: 'column', gap: '6px'}}>
             {[
               { label: '系统管理员', email: 'admin@presale.ai', pw: 'admin123', tag: 'tag-r' },
-              { label: '高级SA 张志远', email: 'zhang@presale.ai', pw: 'demo123', tag: 'tag-b' },
-              { label: 'SA 李明', email: 'li@presale.ai', pw: 'demo123', tag: 'tag-p' },
+              { label: '高级SA 李华', email: 'zhang@presale.ai', pw: 'demo123', tag: 'tag-b' },
+              { label: '高级SA 李鸿宇', email: 'li@presale.ai', pw: 'demo123', tag: 'tag-p' },
             ].map(acc => (
               <button
                 key={acc.email}

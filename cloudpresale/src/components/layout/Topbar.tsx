@@ -23,7 +23,7 @@ export function Topbar() {
   return (
     <div className="topbar">
       <div className="bc">
-        <span>CloudPresale</span>
+        <span>SolveIQ</span>
         <span>›</span>
         <b>{pageLabels[currentPage] || currentPage}</b>
       </div>
