@@ -419,12 +419,11 @@ export function Dashboard() {
             </div>
             <div className="panel">
               <table className="dt">
-                <thead><tr><th>成员</th><th>角色</th><th>本月方案</th><th>商机数</th></tr></thead>
+                <thead><tr><th>成员</th><th>本月方案</th><th>商机数</th></tr></thead>
                 <tbody>
                   {stats.team_stats.map(m => (
                     <tr key={m.user_id}>
                       <td className="fw6">{m.name}</td>
-                      <td><span className="tag tag-b txs">{m.role}</span></td>
                       <td className="fw6 tg">{m.solutions_this_month}</td>
                       <td className="tmu txs">{m.active_opportunities}</td>
                     </tr>
