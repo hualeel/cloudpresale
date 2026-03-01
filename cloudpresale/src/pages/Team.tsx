@@ -1,13 +1,6 @@
 import { useState, useEffect } from 'react'
 import { teamApi } from '../api'
-import type { TeamMember, UserRole } from '../api/types'
-
-const ROLE_TAG: Record<UserRole, string> = {
-  admin: 'tag-r', senior_sa: 'tag-b', sa: 'tag-p', junior_sa: 'tag-g',
-}
-const ROLE_LABEL: Record<UserRole, string> = {
-  admin: '管理员', senior_sa: '高级SA', sa: 'SA', junior_sa: '初级SA',
-}
+import type { TeamMember } from '../api/types'
 
 const GRADIENTS = [
   'linear-gradient(135deg,var(--acc1),var(--acc2))',
