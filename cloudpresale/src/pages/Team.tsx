@@ -56,7 +56,7 @@ export function Team() {
           <div className="panel" style={{ marginBottom: '18px' }}>
             <table className="dt">
               <thead>
-                <tr><th>姓名</th><th>角色</th><th>本月方案</th><th>负责商机</th><th>加入时间</th></tr>
+                <tr><th>姓名</th><th>本月方案</th><th>负责商机</th><th>加入时间</th></tr>
               </thead>
               <tbody>
                 {members.map((m, i) => (
@@ -69,7 +69,6 @@ export function Team() {
                         {m.user.name}
                       </div>
                     </td>
-                    <td><span className={`tag ${ROLE_TAG[m.user.role]}`}>{ROLE_LABEL[m.user.role]}</span></td>
                     <td className="fw6">{m.solutions_this_month}</td>
                     <td className="tmu txs">{m.active_opportunities}个</td>
                     <td className="tmu txs">{relTime(m.user.created_at)}</td>
@@ -89,7 +88,6 @@ export function Team() {
                       {m.user.name.charAt(0)}
                     </div>
                     <span className="pt">{m.user.name} · 工作概览</span>
-                    <span className={`tag ${ROLE_TAG[m.user.role]} ml-auto`}>{ROLE_LABEL[m.user.role]}</span>
                   </div>
                   <div className="pb-">
                     <div className="three">

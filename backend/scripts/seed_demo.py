@@ -43,11 +43,11 @@ def dt(days_ago=0, hours_ago=0):
 # 2. 用户
 # ─────────────────────────────────────────────
 print("👥 创建用户...")
-admin = User(email="admin@presale.ai", name="系统管理员",   hashed_password=hash_password("admin123"), role=UserRole.admin,     is_active=True, created_at=dt(60))
-zhang = User(email="zhang@presale.ai", name="张志远",       hashed_password=hash_password("demo123"),  role=UserRole.senior_sa, is_active=True, created_at=dt(55))
-li    = User(email="li@presale.ai",    name="李明",         hashed_password=hash_password("demo123"),  role=UserRole.sa,        is_active=True, created_at=dt(50))
-wang  = User(email="wang@presale.ai",  name="王芳",         hashed_password=hash_password("demo123"),  role=UserRole.sa,        is_active=True, created_at=dt(45))
-chen  = User(email="chen@presale.ai",  name="陈静",         hashed_password=hash_password("demo123"),  role=UserRole.junior_sa, is_active=True, created_at=dt(30))
+admin = User(email="admin@presale.ai",   name="系统管理员", hashed_password=hash_password("admin123"), role=UserRole.admin,     is_active=True, created_at=dt(60))
+zhang = User(email="lihua@presale.ai",  name="李华",       hashed_password=hash_password("demo123"),  role=UserRole.senior_sa, is_active=True, created_at=dt(55))
+li    = User(email="lhy@presale.ai",    name="李鸿宇",     hashed_password=hash_password("demo123"),  role=UserRole.senior_sa, is_active=True, created_at=dt(50))
+wang  = User(email="wsh@presale.ai",    name="汪水华",     hashed_password=hash_password("demo123"),  role=UserRole.sa,        is_active=True, created_at=dt(45))
+chen  = User(email="zps@presale.ai",    name="朱培森",     hashed_password=hash_password("demo123"),  role=UserRole.sa,        is_active=True, created_at=dt(30))
 
 for u in [admin, zhang, li, wang, chen]:
     db.add(u)
