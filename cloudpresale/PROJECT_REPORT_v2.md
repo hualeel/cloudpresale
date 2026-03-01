@@ -2,6 +2,8 @@
 
 > 版本：v2.0 | 日期：2026-03-01 | Intelligent Presales Collaboration Platform
 
+**在线体验**：[http://106.54.237.35](http://106.54.237.35) — 请联系管理员获取演示账号
+
 ---
 
 ## 一、项目背景
