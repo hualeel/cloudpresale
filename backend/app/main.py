@@ -15,11 +15,32 @@ from app.api.dashboard import router as dashboard_router
 from app.api.settings import router as settings_router
 
 
+def _ensure_minio_bucket() -> None:
+    """启动时确保 MinIO bucket 存在，不存在则创建。"""
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        from minio import Minio
+        client = Minio(
+            settings.MINIO_ENDPOINT,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=settings.MINIO_SECURE,
+        )
+        bucket = settings.MINIO_BUCKET
+        if not client.bucket_exists(bucket):
+            client.make_bucket(bucket)
+            logger.info(f"MinIO bucket created: {bucket}")
+        else:
+            logger.info(f"MinIO bucket ok: {bucket}")
+    except Exception as exc:
+        logger.warning(f"MinIO bucket init skipped: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 启动时可做初始化（如创建 MinIO bucket 等）
+    _ensure_minio_bucket()
     yield
-    # 关闭时清理资源
 
 
 app = FastAPI(
