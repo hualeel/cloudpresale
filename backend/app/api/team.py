@@ -65,8 +65,28 @@ def update_member(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "用户不存在")
-    for k, v in body.model_dump(exclude_none=True).items():
+    data = body.model_dump(exclude_none=True)
+    if "password" in data:
+        import bcrypt
+        user.hashed_password = bcrypt.hashpw(data.pop("password").encode(), bcrypt.gensalt()).decode()
+    for k, v in data.items():
         setattr(user, k, v)
     db.commit()
     db.refresh(user)
     return UserOut.model_validate(user)
+
+
+@router.delete("/{user_id}", summary="删除成员（管理员）")
+def delete_member(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if user_id == current_user.id:
+        raise HTTPException(400, "不能删除自己")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "用户不存在")
+    db.delete(user)
+    db.commit()
+    return {"ok": True}

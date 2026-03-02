@@ -114,6 +114,9 @@ export const deliverablesApi = {
 // ── Team ─────────────────────────────────────────────
 export const teamApi = {
   list: () => api.get<TeamMember[]>('/team'),
+  update: (id: string, data: { name?: string; role?: string; is_active?: boolean }) =>
+    api.patch<UserOut>(`/team/${id}`, data),
+  delete: (id: string) => api.delete(`/team/${id}`),
 }
 
 // ── Settings ──────────────────────────────────────────
