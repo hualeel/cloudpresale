@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     DEFAULT_LLM: str = "claude-sonnet-4-6"
     LLM_BASE_URL: str = ""  # 留空 = 直连 Anthropic；填 OpenRouter 等兼容地址即可切换
 
+    # 敏感配置加密（Fernet key，base64-urlsafe 32字节）
+    # 生成命令: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # 生产环境必须设置，未设置则明文存储（仅限开发）
+    SETTINGS_ENCRYPT_KEY: str = ""
+
     # ChromaDB（RAG 知识库）
     CHROMA_HOST: str = "localhost"
     CHROMA_PORT: int = 8000

@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timezone
 
 from app.config import settings
+from app.crypto import decrypt_secret
 from app.agents.prompts import AGENT_CONFIGS
 
 logger = logging.getLogger(__name__)
@@ -43,10 +44,11 @@ def _format_requirement(content: dict) -> str:
 
 
 def _read_llm_config() -> dict:
-    """从 DB 读取有效 LLM 配置，返回 {model, anthropic_key, deepseek_key}。DB 优先，env 兜底。"""
+    """从 DB 读取有效 LLM 配置，返回 {model, anthropic_key, deepseek_key, kimi_key}。DB 优先，env 兜底。"""
     model = settings.DEFAULT_LLM
     anthropic_key = settings.ANTHROPIC_API_KEY or ""
     deepseek_key = ""
+    kimi_key = ""
     try:
         from sqlalchemy import create_engine as _ce
         from sqlalchemy.orm import Session as _S
@@ -54,19 +56,21 @@ def _read_llm_config() -> dict:
         _engine = _ce(settings.DATABASE_URL)
         with _S(_engine) as _db:
             rows = _db.query(_SS).filter(
-                _SS.key.in_(["default_llm", "anthropic_api_key", "deepseek_api_key"])
+                _SS.key.in_(["default_llm", "anthropic_api_key", "deepseek_api_key", "kimi_api_key"])
             ).all()
             kv = {r.key: r.value for r in rows if r.value}
             if "default_llm" in kv:
                 model = kv["default_llm"]
             if "anthropic_api_key" in kv:
-                anthropic_key = kv["anthropic_api_key"]
+                anthropic_key = decrypt_secret(kv["anthropic_api_key"])
             if "deepseek_api_key" in kv:
-                deepseek_key = kv["deepseek_api_key"]
+                deepseek_key = decrypt_secret(kv["deepseek_api_key"])
+            if "kimi_api_key" in kv:
+                kimi_key = decrypt_secret(kv["kimi_api_key"])
         _engine.dispose()
     except Exception as e:
         logger.warning(f"_read_llm_config: failed to read from DB: {e}")
-    return {"model": model, "anthropic_key": anthropic_key, "deepseek_key": deepseek_key}
+    return {"model": model, "anthropic_key": anthropic_key, "deepseek_key": deepseek_key, "kimi_key": kimi_key}
 
 
 def _run_with_anthropic(
@@ -148,6 +152,46 @@ def _run_with_deepseek(
     }
 
 
+def _run_with_kimi(
+    config: dict, user_message: str, model: str, api_key: str, on_progress
+) -> dict:
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key, base_url="https://api.moonshot.cn/v1")
+    start_time = datetime.now(timezone.utc)
+    collected_text = []
+    output_tokens = 0
+
+    stream = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": config["system"]},
+            {"role": "user", "content": user_message},
+        ],
+        stream=True,
+        stream_options={"include_usage": True},
+        max_tokens=4096,
+    )
+    char_count = 0
+    for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta.content:
+            text = chunk.choices[0].delta.content
+            collected_text.append(text)
+            char_count += len(text)
+            estimated_progress = min(0.95, char_count / 2000)
+            if on_progress:
+                on_progress(estimated_progress, text)
+        if hasattr(chunk, "usage") and chunk.usage:
+            output_tokens = chunk.usage.completion_tokens or 0
+
+    duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+    return {
+        "content": "".join(collected_text),
+        "input_tokens": 0,
+        "output_tokens": output_tokens,
+        "duration_s": round(duration, 1),
+    }
+
+
 def run_single_agent(
     agent_type: str,
     requirement_content: dict,
@@ -186,7 +230,12 @@ def run_single_agent(
     model = llm_cfg["model"]
     logger.info(f"[{agent_type}] Starting generation with model {model}")
 
-    if model.startswith("deepseek"):
+    if model.startswith("moonshot"):
+        kimi_key = llm_cfg["kimi_key"]
+        if not kimi_key:
+            raise ValueError("Kimi API Key 未配置，请在平台配置中心设置")
+        result = _run_with_kimi(config, user_message, model, kimi_key, on_progress)
+    elif model.startswith("deepseek"):
         deepseek_key = llm_cfg["deepseek_key"]
         if not deepseek_key:
             raise ValueError("DeepSeek API Key 未配置，请在平台配置中心设置")

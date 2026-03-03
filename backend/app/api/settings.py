@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.crypto import encrypt_secret, decrypt_secret
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.user import User
@@ -52,6 +53,16 @@ def _set(db: Session, key: str, value: str, user_id: uuid.UUID):
         db.add(SystemSetting(key=key, value=value, updated_by=user_id))
 
 
+def _set_secret(db: Session, key: str, plaintext: str, user_id: uuid.UUID):
+    """加密后存储敏感字段（API Key 等）。"""
+    _set(db, key, encrypt_secret(plaintext), user_id)
+
+
+def _get_secret(db: Session, key: str) -> str:
+    """读取并解密敏感字段，解密失败自动回退（兼容明文迁移数据）。"""
+    return decrypt_secret(_get(db, key))
+
+
 def _bool(v: str) -> bool:
     return v.lower() not in ("false", "0", "")
 
@@ -69,28 +80,38 @@ def _read_system(db: Session) -> SystemConfig:
 
 
 def get_effective_api_key(db: Session) -> str:
-    """Anthropic API Key：优先读 DB，回退到环境变量。"""
-    db_key = _get(db, "anthropic_api_key")
+    """Anthropic API Key：优先读 DB（解密），回退到环境变量。"""
+    db_key = _get_secret(db, "anthropic_api_key")
     if db_key:
         return db_key
     return settings.ANTHROPIC_API_KEY or ""
 
 
 def get_effective_deepseek_key(db: Session) -> str:
-    """DeepSeek API Key：仅从 DB 读取（无默认环境变量）。"""
-    return _get(db, "deepseek_api_key") or ""
+    """DeepSeek API Key：仅从 DB 读取并解密（无默认环境变量）。"""
+    return _get_secret(db, "deepseek_api_key") or ""
+
+
+def get_effective_kimi_key(db: Session) -> str:
+    """Kimi API Key：仅从 DB 读取并解密（无默认环境变量）。"""
+    return _get_secret(db, "kimi_api_key") or ""
 
 
 def _build_llm_status(db: Session) -> LLMStatus:
     anthropic_key = get_effective_api_key(db)
     deepseek_key = get_effective_deepseek_key(db)
+    kimi_key = get_effective_kimi_key(db)
     current_model = _get(db, "default_llm")
     is_deepseek = current_model.startswith("deepseek")
+    is_kimi = current_model.startswith("moonshot")
 
     anthropic_configured = bool(anthropic_key)
     deepseek_configured = bool(deepseek_key)
+    kimi_configured = bool(kimi_key)
 
-    if is_deepseek:
+    if is_kimi:
+        status = "connected" if kimi_configured else "not_configured"
+    elif is_deepseek:
         status = "connected" if deepseek_configured else "not_configured"
     else:
         status = "connected" if anthropic_configured else "not_configured"
@@ -98,6 +119,7 @@ def _build_llm_status(db: Session) -> LLMStatus:
     return LLMStatus(
         anthropic_configured=anthropic_configured,
         deepseek_configured=deepseek_configured,
+        kimi_configured=kimi_configured,
         current_model=current_model,
         status=status,
     )
@@ -132,9 +154,11 @@ def update_llm(
     current_user: User = Depends(require_admin),
 ):
     if body.anthropic_api_key is not None:
-        _set(db, "anthropic_api_key", body.anthropic_api_key, current_user.id)
+        _set_secret(db, "anthropic_api_key", body.anthropic_api_key, current_user.id)
     if body.deepseek_api_key is not None:
-        _set(db, "deepseek_api_key", body.deepseek_api_key, current_user.id)
+        _set_secret(db, "deepseek_api_key", body.deepseek_api_key, current_user.id)
+    if body.kimi_api_key is not None:
+        _set_secret(db, "kimi_api_key", body.kimi_api_key, current_user.id)
     if body.default_model is not None:
         _set(db, "default_llm", body.default_model, current_user.id)
     db.commit()
@@ -149,6 +173,8 @@ def test_llm(
 ):
     if body.provider == "deepseek":
         return _test_deepseek(body.api_key or get_effective_deepseek_key(db), db)
+    elif body.provider == "kimi":
+        return _test_kimi(body.api_key or get_effective_kimi_key(db), db)
     else:
         return _test_anthropic(body.api_key or get_effective_api_key(db), db)
 
@@ -157,8 +183,8 @@ def _test_anthropic(api_key: str, db: Session) -> LLMTestResult:
     if not api_key:
         return LLMTestResult(ok=False, model="", error="Anthropic API Key 未配置")
     model = _get(db, "default_llm")
-    # If current model is deepseek, test with a default claude model
-    if model.startswith("deepseek"):
+    # If current model is deepseek or moonshot, test with a default claude model
+    if model.startswith("deepseek") or model.startswith("moonshot"):
         model = "claude-sonnet-4-6"
     t0 = time.time()
     try:
@@ -184,6 +210,26 @@ def _test_deepseek(api_key: str, db: Session) -> LLMTestResult:
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+        client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=5,
+        )
+        return LLMTestResult(ok=True, model=model, latency_ms=int((time.time() - t0) * 1000))
+    except Exception as exc:
+        return LLMTestResult(ok=False, model=model, error=str(exc)[:200])
+
+
+def _test_kimi(api_key: str, db: Session) -> LLMTestResult:
+    if not api_key:
+        return LLMTestResult(ok=False, model="", error="Kimi API Key 未配置")
+    model = _get(db, "default_llm")
+    if not model.startswith("moonshot"):
+        model = "moonshot-v1-8k"
+    t0 = time.time()
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url="https://api.moonshot.cn/v1")
         client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": "ping"}],

@@ -226,6 +226,7 @@ export interface TeamMember {
 export interface LLMStatus {
   anthropic_configured: boolean
   deepseek_configured: boolean
+  kimi_configured: boolean
   current_model: string
   status: 'connected' | 'not_configured' | 'error'
   error: string | null

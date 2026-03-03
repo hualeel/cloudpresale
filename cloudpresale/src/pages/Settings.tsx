@@ -19,6 +19,12 @@ const DEEPSEEK_MODELS = [
   { value: 'deepseek-reasoner', label: 'DeepSeek-R1（推理增强）' },
 ]
 
+const KIMI_MODELS = [
+  { value: 'moonshot-v1-8k',   label: 'Moonshot v1 8k（标准）' },
+  { value: 'moonshot-v1-32k',  label: 'Moonshot v1 32k（长文本）' },
+  { value: 'moonshot-v1-128k', label: 'Moonshot v1 128k（超长文本）' },
+]
+
 export function Settings() {
   const [system, setSystem] = useState<SystemConfig>({
     default_llm: 'claude-sonnet-4-6',
@@ -52,6 +58,17 @@ export function Settings() {
   const [testingDeepseek, setTestingDeepseek] = useState(false)
   const [deepseekTestResult, setDeepseekTestResult] = useState<LLMTestResult | null>(null)
 
+  // ── Kimi state ──────────────────────────────────────
+  const [kimiModel, setKimiModel] = useState('moonshot-v1-8k')
+  const [kimiKeyInput, setKimiKeyInput] = useState('')
+  const [kimiKeyConfigured, setKimiKeyConfigured] = useState(false)
+  const [kimiConnected, setKimiConnected] = useState(false)
+  const [showKimiKey, setShowKimiKey] = useState(false)
+  const [savingKimi, setSavingKimi] = useState(false)
+  const [kimiSaveMsg, setKimiSaveMsg] = useState('')
+  const [testingKimi, setTestingKimi] = useState(false)
+  const [kimiTestResult, setKimiTestResult] = useState<LLMTestResult | null>(null)
+
   // ── System config state ─────────────────────────────
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -63,8 +80,13 @@ export function Settings() {
         setSystem(data.system)
         setApiKeyConfigured(data.llm.anthropic_configured)
         setDeepseekKeyConfigured(data.llm.deepseek_configured)
+        setKimiKeyConfigured(data.llm.kimi_configured)
         const isDeepseek = data.system.default_llm.startsWith('deepseek')
-        if (isDeepseek) {
+        const isKimi = data.system.default_llm.startsWith('moonshot')
+        if (isKimi) {
+          setKimiModel(data.system.default_llm)
+          setKimiConnected(data.llm.status === 'connected')
+        } else if (isDeepseek) {
           setDeepseekModel(data.system.default_llm)
           setDeepseekConnected(data.llm.status === 'connected')
         } else {
@@ -162,6 +184,47 @@ export function Settings() {
     }
   }
 
+  // ── Kimi handlers ────────────────────────────────────
+  async function handleSaveKimi() {
+    setSavingKimi(true)
+    setKimiSaveMsg('')
+    setKimiTestResult(null)
+    try {
+      const payload: { kimi_api_key?: string; default_model?: string } = {
+        default_model: kimiModel,
+      }
+      if (kimiKeyInput.trim()) payload.kimi_api_key = kimiKeyInput.trim()
+      const llm = await settingsApi.updateLlm(payload)
+      setKimiKeyConfigured(llm.kimi_configured)
+      setKimiConnected(llm.status === 'connected')
+      setSystem(s => ({ ...s, default_llm: kimiModel }))
+      if (kimiKeyInput.trim()) setKimiKeyInput('')
+      setKimiSaveMsg('ok')
+    } catch (err: unknown) {
+      setKimiSaveMsg('err: ' + (err instanceof Error ? err.message : '保存失败'))
+    } finally {
+      setSavingKimi(false)
+      setTimeout(() => setKimiSaveMsg(''), 4000)
+    }
+  }
+
+  async function handleTestKimi() {
+    setTestingKimi(true)
+    setKimiTestResult(null)
+    try {
+      const r = await settingsApi.testLlm({
+        provider: 'kimi',
+        api_key: kimiKeyInput.trim() || undefined,
+      })
+      setKimiTestResult(r)
+      if (r.ok) setKimiConnected(true)
+    } catch {
+      setKimiTestResult({ ok: false, model: kimiModel, latency_ms: null, error: '请求失败' })
+    } finally {
+      setTestingKimi(false)
+    }
+  }
+
   async function handleSaveSystem() {
     setSaving(true)
     setSaveMsg('')
@@ -181,7 +244,9 @@ export function Settings() {
   )
 
   // Which provider is currently active
-  const activeProvider = system.default_llm.startsWith('deepseek') ? 'deepseek' : 'anthropic'
+  const activeProvider = system.default_llm.startsWith('moonshot') ? 'kimi'
+    : system.default_llm.startsWith('deepseek') ? 'deepseek'
+    : 'anthropic'
 
   return (
     <div>
@@ -382,6 +447,101 @@ export function Settings() {
                   disabled={savingDeepseek}
                 >
                   {savingDeepseek ? '保存中…' : '保存并设为默认'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Moonshot Kimi ── */}
+          <div className="llm" style={{
+            borderColor: kimiConnected ? 'rgba(0,212,170,.25)'
+              : kimiKeyConfigured ? 'rgba(124,58,237,.3)' : 'var(--border)',
+            opacity: activeProvider === 'kimi' ? 1 : 0.75,
+          }}>
+            <div className="llm-logo" style={{ background: 'linear-gradient(135deg,#7c3aed,#5b21b6)' }}>🌙</div>
+            <div className="llm-info">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <div className="llm-name">Moonshot Kimi</div>
+                <span className={`tag ${kimiConnected ? 'tag-g' : kimiKeyConfigured ? 'tag-o' : 'tag-gray'} txs`}>
+                  {kimiConnected ? '● 已连通' : kimiKeyConfigured ? '● 已配置' : '● 未配置'}
+                </span>
+                {activeProvider === 'kimi' && (
+                  <span className="tag tag-g txs" style={{ fontSize: '9px' }}>当前使用</span>
+                )}
+              </div>
+
+              {/* Model selector */}
+              <div className="fg" style={{ marginBottom: '10px' }}>
+                <div className="fl" style={{ marginBottom: '5px', fontSize: '11.5px' }}>模型</div>
+                <select
+                  className="fi"
+                  style={{ fontSize: '12px', padding: '5px 8px' }}
+                  value={kimiModel}
+                  onChange={e => setKimiModel(e.target.value)}
+                >
+                  {KIMI_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
+
+              {/* API Key input */}
+              <div className="fg" style={{ marginBottom: '10px' }}>
+                <div className="fl" style={{ marginBottom: '5px', fontSize: '11.5px' }}>
+                  API Key
+                  {kimiKeyConfigured && (
+                    <span className="tmu" style={{ marginLeft: '6px', fontSize: '10px' }}>（已保存，输入新值可替换）</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <input
+                    className="fi"
+                    type={showKimiKey ? 'text' : 'password'}
+                    placeholder={kimiKeyConfigured ? '输入新 Key 可替换…' : 'sk-…'}
+                    value={kimiKeyInput}
+                    onChange={e => { setKimiKeyInput(e.target.value); setKimiTestResult(null) }}
+                    style={{ flex: 1, fontSize: '12px' }}
+                    autoComplete="off"
+                  />
+                  <button
+                    className="btn btn-ghost btn-xs"
+                    onClick={() => setShowKimiKey(v => !v)}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {showKimiKey ? '🙈' : '👁️'}
+                  </button>
+                </div>
+                <div className="txs tmu" style={{ marginTop: '4px', fontSize: '10.5px' }}>
+                  可在 <span style={{ color: 'var(--acc1)' }}>platform.moonshot.cn</span> 获取
+                </div>
+              </div>
+
+              {kimiTestResult && (
+                <div className={`alert ${kimiTestResult.ok ? 'a-ok' : 'a-err'}`} style={{ fontSize: '11.5px', marginBottom: '10px' }}>
+                  {kimiTestResult.ok
+                    ? `✓ 连接成功 · ${kimiTestResult.model} · 延迟 ${kimiTestResult.latency_ms}ms`
+                    : `✗ 连接失败：${kimiTestResult.error}`}
+                </div>
+              )}
+              {kimiSaveMsg && (
+                <div className={`alert ${kimiSaveMsg === 'ok' ? 'a-ok' : 'a-err'}`} style={{ fontSize: '11.5px', marginBottom: '10px' }}>
+                  {kimiSaveMsg === 'ok' ? '✓ 配置已保存（Kimi 设为默认模型）' : kimiSaveMsg}
+                </div>
+              )}
+
+              <div className="fc g8">
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={handleTestKimi}
+                  disabled={testingKimi || (!kimiKeyInput.trim() && !kimiKeyConfigured)}
+                  title={!kimiKeyInput.trim() && !kimiKeyConfigured ? '请先输入 API Key' : ''}
+                >
+                  {testingKimi ? '⟳ 测试中…' : '🔌 测试连接'}
+                </button>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSaveKimi}
+                  disabled={savingKimi}
+                >
+                  {savingKimi ? '保存中…' : '保存并设为默认'}
                 </button>
               </div>
             </div>

@@ -95,6 +95,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DEFAULT_LLM: ${DEFAULT_LLM:-claude-sonnet-4-6}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
+      SETTINGS_ENCRYPT_KEY: ${SETTINGS_ENCRYPT_KEY:-}
       CHROMA_HOST: chroma
       CHROMA_PORT: 8000
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
@@ -124,6 +125,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DEFAULT_LLM: ${DEFAULT_LLM:-claude-sonnet-4-6}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
+      SETTINGS_ENCRYPT_KEY: ${SETTINGS_ENCRYPT_KEY:-}
       CHROMA_HOST: chroma
       CHROMA_PORT: 8000
     depends_on:
